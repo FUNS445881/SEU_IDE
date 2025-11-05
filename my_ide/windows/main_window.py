@@ -1,9 +1,20 @@
 import sys
 import os
-from PySide6.QtWidgets import QApplication,QMainWindow,QPlainTextEdit,QStatusBar,QMenuBar,QFileDialog, QDockWidget
+from PySide6.QtWidgets import QApplication,QMainWindow,QPlainTextEdit,QFileDialog, QDockWidget, QHBoxLayout, QStackedWidget,QWidget
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt
 from my_ide.components.file_tree import FileTreeWidget
+from my_ide.components.activity_bar import ActivityBar
+
+# --- B. (可选但推荐) 创建一个占位符搜索视图 ---
+# 这样我们的代码结构更完整，即使现在搜索功能还没做
+class SearchView(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # 暂时可以是一个空的QWidget，之后再实现具体功能
+        # from PySide6.QtWidgets import QLabel, QVBoxLayout
+        # layout = QVBoxLayout(self)
+        # layout.addWidget(QLabel("搜索功能待实现"))
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -21,7 +32,7 @@ class MainWindow(QMainWindow):
         self._init_editor()
         self._init_status_bar()
         self._init_menu_bar()
-        self._init_file_dock()
+        self._init_sidebar()
 
         self.show()
 
@@ -68,30 +79,44 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator() # 添加一条分割线
         file_menu.addAction(exit_action)
     
-    def _init_file_dock(self):
-        """
-        初始化文件树停靠窗口
-        """
-        # 创建停靠窗口
-        self.file_dock = QDockWidget("文件", self)
-        self.file_dock.setAllowedAreas(Qt.LeftDockWidgetArea )
-        
-        # 禁用关闭按钮，只允许浮动和移动
-        self.file_dock.setFeatures(QDockWidget.NoDockWidgetFeatures)
-        
-        # 创建文件树组件
-        self.file_tree = FileTreeWidget(self)
-        
-        # 设置文件树的根路径为当前工作目录
+    def _init_sidebar(self):
+        self.activity_bar = ActivityBar(self)
+        self.stacked_widget = QStackedWidget(self)
+
+        self.file_tree_view = FileTreeWidget(self)
+        self.search_panel = SearchView(self)
+
+        self.views = {
+            "resource_manager": self.file_tree_view,
+            "search_panel": self.search_panel
+        }
+        self.stacked_widget.addWidget(self.views["resource_manager"])
+        self.stacked_widget.addWidget(self.views["search_panel"])
+
+        sidebar_container = QWidget()
+        sidebar_layout = QHBoxLayout(sidebar_container)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.setSpacing(0)
+
+        sidebar_layout.addWidget(self.activity_bar)
+        sidebar_layout.addWidget(self.stacked_widget)
+
+        # 放入QDockWidget
+        self.sidebar_dock = QDockWidget("Sidebar", self)
+        self.sidebar_dock.setWidget(sidebar_container)
+        self.sidebar_dock.setTitleBarWidget(QWidget())  # 隐藏标题栏
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.sidebar_dock)
+
+        self.activity_bar.view_changed.connect(self.switch_sidebar_view)
+
         current_dir = os.getcwd()
-        self.file_tree.set_root_path(current_dir)
-        
-        # 连接doubleClicked信号到槽函数
-        self.file_tree.tree_view.doubleClicked.connect(self._on_file_double_clicked)
-        
-        # 将文件树组件添加到停靠窗口
-        self.file_dock.setWidget(self.file_tree)
-        self.addDockWidget(Qt.LeftDockWidgetArea, self.file_dock)    
+        self.file_tree_view.set_root_path(current_dir)
+        self.file_tree_view.tree_view.doubleClicked.connect(self._on_file_double_clicked)
+
+    def switch_sidebar_view(self, view_id):
+        if view_id in self.views:
+            widget = self.views[view_id]
+            self.stacked_widget.setCurrentWidget(widget)
 
     def _on_file_open(self):
         """处理文件打开动作的槽函数"""
@@ -127,7 +152,7 @@ class MainWindow(QMainWindow):
         参数: index - 文件树中双击的项的索引
         """
         # 从模型中获取文件路径
-        file_path = self.file_tree.model.filePath(index)
+        file_path = self.file_tree_view.model.filePath(index)
         
         # 检查是否是文件（非目录）
         if os.path.isfile(file_path):

@@ -28,7 +28,10 @@ class FileTreeWidget(QWidget):
         # 创建树视图
         self.tree_view = QTreeView()
         self.tree_view.setModel(self.model)
-        
+        self.tree_view.setExpandsOnDoubleClick(False)
+        self.tree_view.clicked.connect(self._on_item_clicked)
+        self.tree_view.setItemsExpandable(True)
+        self.tree_view.setAnimated(True)
         # 设置树视图属性
         self.tree_view.setHeaderHidden(True)  # 隐藏标题行
         # 只显示名称列，隐藏其他列（大小、类型、修改日期等）
@@ -43,7 +46,6 @@ class FileTreeWidget(QWidget):
         
         # 添加到布局
         layout.addWidget(self.tree_view)
-        
         # 设置布局边距为0
         layout.setContentsMargins(0, 0, 0, 0)
     
@@ -71,3 +73,10 @@ class FileTreeWidget(QWidget):
                 self.tree_view.setCurrentIndex(index)
                 return True
         return False
+
+    def _on_item_clicked(self, index):
+        if self.model.isDir(index):
+            if self.tree_view.isExpanded(index):
+                self.tree_view.collapse(index)
+            else:
+                self.tree_view.expand(index)
