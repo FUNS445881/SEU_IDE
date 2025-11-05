@@ -74,7 +74,10 @@ class MainWindow(QMainWindow):
         """
         # 创建停靠窗口
         self.file_dock = QDockWidget("文件", self)
-        self.file_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        self.file_dock.setAllowedAreas(Qt.LeftDockWidgetArea )
+        
+        # 禁用关闭按钮，只允许浮动和移动
+        self.file_dock.setFeatures(QDockWidget.NoDockWidgetFeatures)
         
         # 创建文件树组件
         self.file_tree = FileTreeWidget(self)
@@ -88,9 +91,7 @@ class MainWindow(QMainWindow):
         
         # 将文件树组件添加到停靠窗口
         self.file_dock.setWidget(self.file_tree)
-        
-        # 将停靠窗口添加到主窗口左侧
-        self.addDockWidget(Qt.LeftDockWidgetArea, self.file_dock)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.file_dock)    
 
     def _on_file_open(self):
         """处理文件打开动作的槽函数"""
