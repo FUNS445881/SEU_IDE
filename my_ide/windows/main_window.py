@@ -1,6 +1,9 @@
 import sys
-from PySide6.QtWidgets import QApplication,QMainWindow,QPlainTextEdit,QStatusBar,QMenuBar,QFileDialog
+import os
+from PySide6.QtWidgets import QApplication,QMainWindow,QPlainTextEdit,QStatusBar,QMenuBar,QFileDialog, QDockWidget
 from PySide6.QtGui import QAction
+from PySide6.QtCore import Qt
+from my_ide.components.file_tree import FileTreeWidget
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -18,6 +21,7 @@ class MainWindow(QMainWindow):
         self._init_editor()
         self._init_status_bar()
         self._init_menu_bar()
+        self._init_file_dock()
 
         self.show()
 
@@ -63,6 +67,30 @@ class MainWindow(QMainWindow):
         file_menu.addAction(save_action)
         file_menu.addSeparator() # 添加一条分割线
         file_menu.addAction(exit_action)
+    
+    def _init_file_dock(self):
+        """
+        初始化文件树停靠窗口
+        """
+        # 创建停靠窗口
+        self.file_dock = QDockWidget("文件", self)
+        self.file_dock.setAllowedAreas(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea)
+        
+        # 创建文件树组件
+        self.file_tree = FileTreeWidget(self)
+        
+        # 设置文件树的根路径为当前工作目录
+        current_dir = os.getcwd()
+        self.file_tree.set_root_path(current_dir)
+        
+        # 连接doubleClicked信号到槽函数
+        self.file_tree.tree_view.doubleClicked.connect(self._on_file_double_clicked)
+        
+        # 将文件树组件添加到停靠窗口
+        self.file_dock.setWidget(self.file_tree)
+        
+        # 将停靠窗口添加到主窗口左侧
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.file_dock)
 
     def _on_file_open(self):
         """处理文件打开动作的槽函数"""
@@ -74,16 +102,35 @@ class MainWindow(QMainWindow):
         )
         
         if file_path:
-            try:
-                with open(file_path, 'r', encoding='utf-8') as file:
-                    content = file.read()
-                    self.editor.setPlainText(content)
-                    self.current_file_path = file_path
-                    self.setWindowTitle(f"My IDE - {file_path}")
-                    self.statusBar().showMessage(f"已打开文件: {file_path}", 3000)
-            except Exception as e:
-                self.statusBar().showMessage(f"打开文件失败: {str(e)}", 3000)
-                print(f"Error opening file: {e}")
+            self._open_file(file_path)
+    
+    def _open_file(self, file_path):
+        """
+        打开指定路径的文件
+        参数: file_path - 要打开的文件路径
+        """
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                content = file.read()
+                self.editor.setPlainText(content)
+                self.current_file_path = file_path
+                self.setWindowTitle(f"My IDE - {file_path}")
+                self.statusBar().showMessage(f"已打开文件: {file_path}", 3000)
+        except Exception as e:
+            self.statusBar().showMessage(f"打开文件失败: {str(e)}", 3000)
+            print(f"Error opening file: {e}")
+
+    def _on_file_double_clicked(self, index):
+        """
+        处理文件树中文件双击事件
+        参数: index - 文件树中双击的项的索引
+        """
+        # 从模型中获取文件路径
+        file_path = self.file_tree.model.filePath(index)
+        
+        # 检查是否是文件（非目录）
+        if os.path.isfile(file_path):
+            self._open_file(file_path)
 
     def _on_file_save(self):
         """处理文件保存动作的槽函数"""
@@ -115,6 +162,7 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     self.statusBar().showMessage(f"保存文件失败: {str(e)}", 3000)
                     print(f"Error saving file: {e}")
+    
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
