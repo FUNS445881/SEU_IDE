@@ -193,14 +193,18 @@ class MainWindow(QMainWindow):
         参数: file_path - 点击的结果对应的文件路径
               line_number - 点击的结果对应的行号
         """
-        self._open_file(file_path)
+        if self.current_file_path != file_path:
+            self._open_file(file_path)
         # 定位到指定行号
-        if self.editor:
-            cursor = self.editor.textCursor()
-            cursor.movePosition(QTextCursor.Start)
-            cursor.movePosition(QTextCursor.Down, QTextCursor.MoveAnchor, line_number - 1)
-            self.editor.setTextCursor(cursor)
-            self.editor.setFocus()
+        if self.editor and self.current_file_path == file_path:
+            doucument = self.editor.document()
+            block = doucument.findBlockByNumber(line_number - 1)
+            if block.isValid():
+                cursor = QTextCursor(block)
+                self.editor.setTextCursor(cursor)
+                self.editor.setFocus()
+            else:
+                self.statusBar().showMessage(f"无法定位到指定行号 {line_number}", 3000)
         else:
             self.statusBar().showMessage("文本编辑器未初始化，无法定位行号", 3000)
 
