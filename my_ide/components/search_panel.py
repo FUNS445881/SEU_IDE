@@ -1,10 +1,12 @@
 import os
 import re
 import html
+from PySide6.QtGui import QFontMetrics,QColor
 from PySide6.QtCore import QObject,Signal,QThread,Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout,QHBoxLayout,QLineEdit,
-    QPushButton,QCheckBox,QTreeWidget,QTreeWidgetItem,QHeaderView,QLabel
+    QPushButton,QCheckBox,QTreeWidget,QTreeWidgetItem,QHeaderView,QLabel,
+    QAbstractItemView
 )
 from my_ide.config.settings import ignored_dirs, ignored_exts
 
@@ -17,11 +19,12 @@ class SearchWorker(QObject):
     search_finished = Signal(int,int) # 信号：搜索完成，参数为总文件数和总匹配数
     error_occurred = Signal(str)  # 信号：发生错误，参数为错误信息
 
-    def __init__(self,root_path,search_term,is_case_sensitive,use_regex):
+    def __init__(self,root_path,search_term,is_case_sensitive,is_strict_match,use_regex):
         super().__init__()
         self.root_path = root_path
         self.search_term = search_term
         self.is_case_sensitive = is_case_sensitive
+        self.is_strict_match = is_strict_match
         self.use_regex = use_regex
         self._is_running = True
     
@@ -36,11 +39,13 @@ class SearchWorker(QObject):
             if root_dir_name in ignored_dirs:
                 self.search_finished.emit(0, 0)
                 return
+            final_search_term = self.search_term
+            if not self.use_regex:
+                final_search_term = re.escape(self.search_term)
+            if self.is_strict_match:
+                final_search_term = r'\b' + final_search_term + r'\b'
             flags = 0 if self.is_case_sensitive else re.IGNORECASE
-            if self.use_regex:
-                pattern = re.compile(self.search_term, flags)
-            else:
-                pattern = re.compile(re.escape(self.search_term), flags)
+            pattern = re.compile(final_search_term, flags)               
             for dirpath, dirs, filenames in os.walk(self.root_path):
                 if not self._is_running:
                     break
@@ -79,7 +84,7 @@ class SearchWorker(QObject):
 
 class SearchPanel(QWidget):
     # 用户点击信号
-    result_clicked = Signal(str,int) # 参数为文件路径和行号
+    result_clicked = Signal(str,int,int,int) # 参数为文件路径,行号,匹配开始位置,匹配结束位置
 
     # 故意和worker不同名，为了体现层级关系.同时也是为了封装
     search_completed = Signal(int,int) # 参数为总文件数和总匹配数
@@ -90,6 +95,9 @@ class SearchPanel(QWidget):
         self.root_path = root_path
         self.search_thread = None
         self.search_worker = None
+
+        # 折叠字典
+        self.file_items = {}
 
         self._init_ui()
 
@@ -112,29 +120,18 @@ class SearchPanel(QWidget):
         options_layout.addWidget(self.strict_checkbox)
         options_layout.addWidget(self.regex_checkbox)
 
-
-        # 全部展开，全部折叠
-        # self.expand_all_button = QPushButton("全部展开")
-        # self.expand_all_button.setToolTip("展开所有搜索结果")
-        # self.collapse_all_button = QPushButton("全部折叠")
-        # self.collapse_all_button.setToolTip("折叠所有搜索结果")
-        # options_layout.addWidget(self.expand_all_button)
-        # options_layout.addWidget(self.collapse_all_button)
-
         layout.addLayout(options_layout)
-        # 结果显示区域
+        #使用双列布局 ---
         self.results_tree = QTreeWidget()
-        self.results_tree.setHeaderLabels(["文件路径", "内容", "行号"])
-        # self.results_tree.setHeadereHidden(True)
-        # self.results_tree.setColumnCount(3)
-        # 表头调整
+        self.results_tree.setColumnCount(2)
+        self.results_tree.setHeaderHidden(True)
+        self.results_tree.setIndentation(5) # 设置子项的缩进距离
+
         header = self.results_tree.header()
-        header.setSectionResizeMode(0, QHeaderView.Interactive)
-        header.setSectionResizeMode(1, QHeaderView.Interactive)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        
-        self.results_tree.setColumnWidth(0, 75)
-        self.results_tree.setColumnWidth(1, 150)
+        # 第0列（行号）：宽度根据内容自适应
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        # 第1列（内容）：占据所有剩余空间
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
 
         layout.addWidget(self.results_tree)
 
@@ -156,6 +153,8 @@ class SearchPanel(QWidget):
             self.search_thread.quit()
             self.search_thread.wait()
         
+        self.file_items.clear()
+
         self.results_tree.clear()
         self.search_button.setEnabled(False)
         self.search_button.setText("搜索中...")
@@ -164,6 +163,7 @@ class SearchPanel(QWidget):
             self.root_path,
             search_term,
             self.case_sensitive_checkbox.isChecked(),
+            self.strict_checkbox.isChecked(),
             self.regex_checkbox.isChecked()
         )
         self.search_thread = QThread()
@@ -185,40 +185,58 @@ class SearchPanel(QWidget):
 
         self.search_thread.start()
 
-    def add_match(self,file_path,line_number,line_content,match_start,match_end):
+    def add_match(self, file_path, line_number, line_content, match_start, match_end):
         """
-        添加搜索结果项
+        使用双列布局添加搜索结果项
         """
-        top_level_items = self.results_tree.findItems(file_path, Qt.MatchExactly, 0)
-        if top_level_items:
-            parent_item = top_level_items[0]
+        # 查找或创建父项
+        if file_path in self.file_items:
+            parent_item = self.file_items[file_path]
         else:
-            parent_item = QTreeWidgetItem(self.results_tree, [os.path.basename(file_path)])
-            parent_item.setToolTip(0, file_path)
-            parent_item.setExpanded(True)
+            # 父项跨越所有列，所以我们用 setFirstColumnSpanned
+            parent_item = QTreeWidgetItem(self.results_tree)
+            parent_item.setFirstColumnSpanned(True)
             parent_item.setData(0, Qt.UserRole, file_path)
-        # 添加子项
-        child_item = QTreeWidgetItem(parent_item, ["", "", f"{line_number}"])
-        child_item.setData(0, Qt.UserRole, (file_path, line_number))
+            parent_item.setData(0, Qt.UserRole + 1, 0)
+            parent_item.setToolTip(0, file_path)
+            self.file_items[file_path] = parent_item
+            parent_item.setExpanded(True)
 
-        # 高亮匹配部分
-        # 1.为了防止搜索中的<>被误以为HTML标签，先转义
-        escaped_content = html.escape(line_content)
-        # 2.构建高光HTML字符串
+        # 更新父项的匹配计数和文本
+        match_count = parent_item.data(0, Qt.UserRole + 1) + 1
+        parent_item.setData(0, Qt.UserRole + 1, match_count)
+        parent_item.setText(0, f"{os.path.basename(file_path)} ({match_count})")
+
+        # --- 创建子项，分别设置两列的内容 ---
+        child_item = QTreeWidgetItem(parent_item)
+        child_item.setFirstColumnSpanned(False)
+        item_data = (file_path, line_number, match_start, match_end, line_content)
+        child_item.setData(0, Qt.UserRole, item_data)
+
+        # 第0列: 设置行号文本
+        child_item.setText(0, str(line_number))
+        child_item.setTextAlignment(0, Qt.AlignRight | Qt.AlignTop)
+        child_item.setForeground(0, QColor("grey")) # 用灰色显示行号
+
+        # 第1列: 设置带高亮的内容QLabel        
+        prefix = line_content[:match_start]
+        match = line_content[match_start:match_end]
+        suffix = line_content[match_end:]
         highlighted_content = (
-            escaped_content[:match_start] +
+            html.escape(prefix, quote=False) +
             f'<span style="background-color: yellow; color: black;">' +
-            escaped_content[match_start:match_end] +
+            html.escape(match, quote=False) +
             '</span>' +
-            escaped_content[match_end:]
+            html.escape(suffix, quote=False)
         )
-        # 3.创建一个QLabel来显示高亮内容
         content_label = QLabel(highlighted_content)
         content_label.setTextFormat(Qt.RichText)
-        content_label.setContentsMargins(4,0,4,0)
+        content_label.setWordWrap(False)
+        content_label.setContentsMargins(4, 1, 4, 1) # 微调边距
+        content_label.setToolTip(line_content)
+
         self.results_tree.setItemWidget(child_item, 1, content_label)
 
-    
     def on_search_error(self,error_message):
         """
         处理搜索错误
@@ -239,18 +257,22 @@ class SearchPanel(QWidget):
         self.search_completed.emit(files_searched, matches_found)
         print(f"搜索完成: 搜索了 {files_searched} 个文件，找到 {matches_found} 个匹配项")
 
-    def on_result_clicked(self,item,column):
+    def on_result_clicked(self, item, column):
         """
         处理结果项双击事件
         """
-        data = item.data(0, Qt.UserRole)
-        if isinstance(data, tuple) and len(data) == 2:
-            file_path, line_number = data
-            self.result_clicked.emit(file_path, line_number)
+        # 提取数据并发送信号
+        is_child_item = bool(item.parent())
+        if is_child_item:
+            data = item.data(0, Qt.UserRole)
+            if isinstance(data, tuple) and len(data) == 5:
+                file_path, line_number, match_start, match_end, line_content = data
+                self.result_clicked.emit(file_path, line_number, match_start, match_end)
         else:
-            print("点击的不是结果项")
-            print(type(data), data)
-            print(len(data) if isinstance(data, (list, tuple)) else "N/A")
+            file_path = item.data(0, Qt.UserRole)
+            line_number = 1
+            self.result_clicked.emit(file_path, line_number, 0, 0)
+
 
     def _on_thread_finished(self):
         """

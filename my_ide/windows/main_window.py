@@ -187,7 +187,7 @@ class MainWindow(QMainWindow):
                     self.statusBar().showMessage(f"保存文件失败: {str(e)}", 3000)
                     print(f"Error saving file: {e}")
     
-    def _on_search_result_clicked(self, file_path, line_number):
+    def _on_search_result_clicked(self, file_path, line_number,start_col,end_col):
         """
         处理搜索结果点击事件
         参数: file_path - 点击的结果对应的文件路径
@@ -201,7 +201,10 @@ class MainWindow(QMainWindow):
             block = doucument.findBlockByNumber(line_number - 1)
             if block.isValid():
                 cursor = QTextCursor(block)
+                cursor.movePosition(QTextCursor.Right, QTextCursor.MoveAnchor, start_col)
+                cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, end_col - start_col)
                 self.editor.setTextCursor(cursor)
+                self.editor.ensureCursorVisible()
                 self.editor.setFocus()
             else:
                 self.statusBar().showMessage(f"无法定位到指定行号 {line_number}", 3000)
