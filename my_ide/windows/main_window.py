@@ -5,6 +5,7 @@ from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt
 from my_ide.components.file_tree import FileTreeWidget
 from my_ide.components.activity_bar import ActivityBar
+from my_ide.components.menu_bar import MenuBar
 
 # --- B. (可选但推荐) 创建一个占位符搜索视图 ---
 # 这样我们的代码结构更完整，即使现在搜索功能还没做
@@ -54,30 +55,9 @@ class MainWindow(QMainWindow):
         """
         初始化菜单栏
         """
-        menuBar = self.menuBar()
-        file_menu = menuBar.addMenu("&File")
-
-        # --- 创建 "File" 菜单下的动作 (Actions) ---
-        # 1. 打开文件的动作
-        open_action = QAction("&Open", self)
-        open_action.setStatusTip("Open a file")
-        open_action.triggered.connect(self._on_file_open) 
-
-        # 2. 保存文件的动作
-        save_action = QAction("&Save", self)
-        save_action.setStatusTip("Save the current file")
-        save_action.triggered.connect(self._on_file_save)
-
-        # 3. 退出的动作
-        exit_action = QAction("&Exit", self)
-        exit_action.setStatusTip("Exit the application")
-        exit_action.triggered.connect(self.close)
-
-        # --- 将动作添加到 "File" 菜单中 ---
-        file_menu.addAction(open_action)
-        file_menu.addAction(save_action)
-        file_menu.addSeparator() # 添加一条分割线
-        file_menu.addAction(exit_action)
+        self.custom_menu_bar = MenuBar(self)
+        self.setMenuBar(self.custom_menu_bar)
+        
     
     def _init_sidebar(self):
         self.activity_bar = ActivityBar(self)

@@ -2,51 +2,75 @@ import sys
 import os
 from PySide6.QtWidgets import QMenuBar, QMenu
 from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtCore import Signal
-from PyQt5.QtGui import QKeySequence
+
 
 class MenuBar(QMenuBar):
     action_triggered = Signal(str)
 
-    def __init__(self):
-        super().__init__()
-        self.init_meun()
+    def __init__(self, main_window_instance):
+        super().__init__(main_window_instance)
+        self.main_window = main_window_instance
+        self._init_menu_content()
     
-    def _init_menu_bar(self):
-       
-        menuBar = self.menuBar()
+    def _init_menu_content(self):
+
+        file_menu = self.addMenu("&File")
+
+        # --- 创建 "File" 菜单下的动作 (Actions) ---
+        # 1. 打开文件的动作
+        open_action = QAction("&Open", self)
+        open_action.setStatusTip("Open a file")
+        open_action.triggered.connect(self.main_window._on_file_open) 
+
+        # 2. 保存文件的动作
+        save_action = QAction("&Save", self)
+        save_action.setStatusTip("Save the current file")
+        save_action.triggered.connect(self.main_window._on_file_save)
+
+        # 3. 退出的动作
+        exit_action = QAction("&Exit", self)
+        exit_action.setStatusTip("Exit the application")
+        exit_action.triggered.connect(self.main_window.close)
+
+        # --- 将动作添加到 "File" 菜单中 ---
+        file_menu.addAction(open_action)
+        file_menu.addAction(save_action)
+        file_menu.addSeparator() # 添加一条分割线
+        file_menu.addAction(exit_action)
     
-        edit_menu = menuBar.addMenu("&Edit")
+        edit_menu = self.addMenu("&Edit")
     
         # 1. 撤销的动作
         undo_action = QAction("&Undo", self)
         undo_action.setStatusTip("Undo the last action")
         undo_action.setShortcut(QKeySequence("Ctrl+Z"))
-        undo_action.triggered.connect(self._on_edit_undo) 
+        undo_action.triggered.connect(self.main_window._on_edit_undo) 
 
         # 2. 恢复的动作
         redo_action = QAction("&Redo", self)
         redo_action.setStatusTip("Redo the undone action")
         redo_action.setShortcut(QKeySequence("Ctrl+Y"))
-        redo_action.triggered.connect(self._on_edit_redo)
+        redo_action.triggered.connect(self.main_window._on_edit_redo)
 
         # 3. 剪切的动作
         cut_action = QAction("Cu&t", self)
         cut_action.setStatusTip("Cut the selected content")
         cut_action.setShortcut(QKeySequence("Ctrl+X"))
-        cut_action.triggered.connect(self._on_edit_cut)
+        cut_action.triggered.connect(self.main_window._on_edit_cut)
 
         # 4. 复制的动作
         copy_action = QAction("&Copy", self)
         copy_action.setStatusTip("Copy the selected content")
         copy_action.setShortcut(QKeySequence("Ctrl+C"))
-        copy_action.triggered.connect(self._on_edit_copy)
+        copy_action.triggered.connect(self.main_window._on_edit_copy)
 
         # 5.粘贴的动作
         paste_action = QAction("&Paste", self)
         paste_action.setStatusTip("Paste content from clipboard")
         paste_action.setShortcut(QKeySequence("Ctrl+V"))
-        paste_action.triggered.connect(self._on_edit_paste)
+        paste_action.triggered.connect(self.main_window._on_edit_paste)
 
         # --- 将动作添加到 "Edit" 菜单中 ---
     
@@ -57,25 +81,25 @@ class MenuBar(QMenuBar):
         edit_menu.addAction(copy_action)
         edit_menu.addAction(paste_action)
 
-        select_menu = menuBar.addMenu("Selec&t")
+        select_menu = self.addMenu("Selec&t")
 
         # 1.全选
         select_all_action = QAction("&Select All", self)
         select_all_action.setStatusTip("Select all content")
         select_all_action.setShortcut(QKeySequence.SelectAll) 
-        select_all_action.triggered.connect(self._on_select_all)
+        select_all_action.triggered.connect(self.main_window._on_select_all)
 
         # 2.重复选择
         repeat_selection_action = QAction("&Repeat Selection", self)
         repeat_selection_action.setStatusTip("Repeat the last selection")
         repeat_selection_action.setShortcut(QKeySequence.SelectAll) 
-        repeat_selection_action.triggered.connect(self._on_repeat_selection)
+        repeat_selection_action.triggered.connect(self.main_window._on_repeat_selection)
 
         # 3.选择所有匹配项
         select_all_matches_action = QAction("Select All Matches", self)
         select_all_matches_action.setStatusTip("Select all items matching the current selection")
         select_all_matches_action.setShortcut(QKeySequence("Ctrl+Shift+L")) 
-        select_all_matches_action.triggered.connect(self._on_select_all_matches) 
+        select_all_matches_action.triggered.connect(self.main_window._on_select_all_matches) 
 
         select_menu.addAction(select_all_action)
         select_menu.addSeparator()
@@ -83,7 +107,7 @@ class MenuBar(QMenuBar):
         select_menu.addSeparator() 
         select_menu.addAction(select_all_matches_action)
 
-        view_menu = menuBar.addMenu("&View")
+        view_menu = self.addMenu("&View")
 
         appearance_menu = QMenu("&Appearance", self)
 
@@ -91,17 +115,16 @@ class MenuBar(QMenuBar):
         fullscreen_action = QAction("&Fullscreen", self)
         fullscreen_action.setStatusTip("Toggle Fullscreen")
         fullscreen_action.setShortcut(QKeySequence("F11")) 
-        fullscreen_action.triggered.connect(self._on_toggle_fullscreen)
+        fullscreen_action.triggered.connect(self.main_window._on_toggle_fullscreen)
         appearance_menu.addAction(fullscreen_action)
 
-        select_menu.addSeparator()
 
         # b.菜单栏
         menubar_action = QAction("&Menu Bar", self)
         menubar_action.setStatusTip("Toggle Menu Bar visibility")
         menubar_action.setCheckable(True) 
         menubar_action.setChecked(True)
-        menubar_action.triggered.connect(self._on_toggle_menubar)
+        menubar_action.triggered.connect(self.main_window._on_toggle_menubar)
         appearance_menu.addAction(menubar_action)
 
         # c.主侧边栏
@@ -110,7 +133,7 @@ class MenuBar(QMenuBar):
         sidebar_action.setShortcut(QKeySequence("Ctrl+B"))
         sidebar_action.setCheckable(True) 
         sidebar_action.setChecked(True) 
-        sidebar_action.triggered.connect(self._on_toggle_sidebar)
+        sidebar_action.triggered.connect(self.main_window._on_toggle_sidebar)
         appearance_menu.addAction(sidebar_action)
     
         appearance_menu.addSeparator() 
@@ -119,14 +142,14 @@ class MenuBar(QMenuBar):
         zoom_in_action = QAction("Zoom &In", self)
         zoom_in_action.setStatusTip("Increase editor zoom level")
         zoom_in_action.setShortcut(QKeySequence("Ctrl+="))
-        zoom_in_action.triggered.connect(self._on_zoom_in)
+        zoom_in_action.triggered.connect(self.main_window._on_zoom_in)
         appearance_menu.addAction(zoom_in_action)
 
         # e.缩小
         zoom_out_action = QAction("Zoom &Out", self)
         zoom_out_action.setStatusTip("Decrease editor zoom level")
         zoom_out_action.setShortcut(QKeySequence("Ctrl+-")) 
-        zoom_out_action.triggered.connect(self._on_zoom_out)
+        zoom_out_action.triggered.connect(self.main_window._on_zoom_out)
         appearance_menu.addAction(zoom_out_action)
 
         view_menu.addMenu(appearance_menu)
@@ -137,13 +160,13 @@ class MenuBar(QMenuBar):
         # a.单列
         single_column_action = QAction("&Single", self)
         single_column_action.setStatusTip("Use a single editor column layout")
-        single_column_action.triggered.connect(lambda: self._on_set_editor_layout("single")) # 假设连接
+        single_column_action.triggered.connect(lambda: self.main_window._on_set_editor_layout("single"))
         editor_layout_menu.addAction(single_column_action)
 
         # b.两列
         two_columns_action = QAction("&Two Columns", self)
         two_columns_action.setStatusTip("Use a two editor column layout")
-        two_columns_action.triggered.connect(lambda: self._on_set_editor_layout("two_cols")) # 假设连接
+        two_columns_action.triggered.connect(lambda: self.main_window._on_set_editor_layout("two_cols"))
         editor_layout_menu.addAction(two_columns_action)
     
         # 将 "Editor Layout" 子菜单添加到 "View" 菜单
@@ -154,15 +177,54 @@ class MenuBar(QMenuBar):
         # 3. 输出 (Output)
         output_action = QAction("&Output", self)
         output_action.setStatusTip("Toggle Output Panel visibility")
-        output_action.setShortcut(QKeySequence("Ctrl+Shift+U")) # 参考 VS Code 快捷键
+        output_action.setShortcut(QKeySequence("Ctrl+Shift+U"))
         output_action.setCheckable(True) 
-        output_action.triggered.connect(self._on_toggle_output) # 假设连接
+        output_action.triggered.connect(self.main_window._on_toggle_word_wrap)
         view_menu.addAction(output_action)
 
         # 4. 自动换行 (Word Wrap)
         word_wrap_action = QAction("Word &Wrap", self)
         word_wrap_action.setStatusTip("Toggle Word Wrap")
-        word_wrap_action.setShortcut(QKeySequence("Alt+Z")) # 参考 VS Code 快捷键
+        word_wrap_action.setShortcut(QKeySequence("Alt+Z"))
         word_wrap_action.setCheckable(True) 
-        word_wrap_action.triggered.connect(self._on_toggle_word_wrap) # 假设连接
+        word_wrap_action.triggered.connect(self.main_window._on_toggle_word_wrap)
         view_menu.addAction(word_wrap_action)
+
+        go_menu = self.addMenu("&Go")
+        run_menu = self.addMenu("&Run")
+        
+        # 1. 启动调试
+        start_debugging_action = QAction("Start &Debugging", self)
+        start_debugging_action.setStatusTip("Start Debugging")
+        start_debugging_action.setShortcut(QKeySequence("F5")) 
+        start_debugging_action.triggered.connect(self.main_window._on_start_debugging)
+        run_menu.addAction(start_debugging_action)
+
+        # 2. 以非调试模式运行
+        run_without_debugging_action = QAction("Run Without &Debugging", self)
+        run_without_debugging_action.setStatusTip("Run Without Debugging")
+        run_without_debugging_action.setShortcut(QKeySequence("Ctrl+F5")) 
+        run_without_debugging_action.triggered.connect(self.main_window._on_run_without_debugging)
+        run_menu.addAction(run_without_debugging_action)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
