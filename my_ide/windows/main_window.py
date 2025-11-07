@@ -3,23 +3,11 @@ import os
 from PySide6.QtWidgets import QApplication,QMainWindow,QPlainTextEdit,QFileDialog, QDockWidget, QHBoxLayout, QStackedWidget,QWidget
 from PySide6.QtGui import QAction,QTextCursor
 from PySide6.QtCore import Qt
-from my_ide.components.file_tree import FileTreeWidget
-from my_ide.components.activity_bar import ActivityBar
-<<<<<<< HEAD
-from my_ide.components.menu_bar import MenuBar
+from ..components.file_tree import FileTreeWidget
+from ..components.activity_bar import ActivityBar
+from ..components.menu_bar import MenuBar
+from ..components.search_panel import SearchPanel
 
-# --- B. (可选但推荐) 创建一个占位符搜索视图 ---
-# 这样我们的代码结构更完整，即使现在搜索功能还没做
-class SearchView(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        # 暂时可以是一个空的QWidget，之后再实现具体功能
-        # from PySide6.QtWidgets import QLabel, QVBoxLayout
-        # layout = QVBoxLayout(self)
-        # layout.addWidget(QLabel("搜索功能待实现"))
-=======
-from my_ide.components.search_panel import SearchPanel
->>>>>>> 2d73859e9be1ea59efb0c323e0c214564a4d40ab
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -40,6 +28,33 @@ class MainWindow(QMainWindow):
         self._init_sidebar()
 
         self.show()
+
+
+    def _on_search_result_clicked(self, *args):
+        """
+        槽函数：处理搜索结果被点击的信号
+        *args 用于接收信号可能传递的任何参数（例如：文件路径、行号等）。
+        """
+        # 在这里实现点击搜索结果后的具体逻辑，
+        # 例如：打开文件并跳转到对应行。
+        print(f"Search result clicked with arguments: {args}")
+        pass # 实际代码实现
+
+    def _on_search_error_found(self, *args):
+        """
+        槽函数：处理搜索过程中发现错误时的信号。
+        """
+        print(f"Search error found: {args}")
+        self.statusBar().showMessage(f"搜索错误: {args[0] if args else '未知错误'}", 3000)
+        pass 
+
+    def _on_search_completed(self, *args):
+        """
+        槽函数：处理搜索完成时的信号。
+        """
+        print(f"Search completed: {args}")
+        self.statusBar().showMessage("搜索完成", 1500)
+        pass    
 
     def _init_editor(self):
         """
@@ -180,7 +195,6 @@ class MainWindow(QMainWindow):
                     self.statusBar().showMessage(f"保存文件失败: {str(e)}", 3000)
                     print(f"Error saving file: {e}")
     
-<<<<<<< HEAD
     def _on_edit_undo(self):
         """处理编辑撤销动作的槽函数"""
         self.editor.undo()
@@ -335,44 +349,6 @@ class MainWindow(QMainWindow):
         """处理运行以非调试模式运行动作的槽函数"""
         self.statusBar().showMessage("正在运行...", 3000)
         print("Console: 正在以非调试模式运行")
-=======
-    def _on_search_result_clicked(self, file_path, line_number):
-        """
-        处理搜索结果点击事件
-        参数: file_path - 点击的结果对应的文件路径
-              line_number - 点击的结果对应的行号
-        """
-        if self.current_file_path != file_path:
-            self._open_file(file_path)
-        # 定位到指定行号
-        if self.editor and self.current_file_path == file_path:
-            doucument = self.editor.document()
-            block = doucument.findBlockByNumber(line_number - 1)
-            if block.isValid():
-                cursor = QTextCursor(block)
-                self.editor.setTextCursor(cursor)
-                self.editor.setFocus()
-            else:
-                self.statusBar().showMessage(f"无法定位到指定行号 {line_number}", 3000)
-        else:
-            self.statusBar().showMessage("文本编辑器未初始化，无法定位行号", 3000)
-
-    def _on_search_error_found(self, error_message):
-        """
-        处理搜索过程中出现的错误
-        参数: error_message - 错误信息
-        """
-        self.statusBar().showMessage(f"搜索错误: {error_message}", 5000)
-    
-    def _on_search_completed(self, total_files, total_matches):
-        """
-        处理搜索完成事件
-        参数: total_files - 搜索的总文件数
-              total_matches - 找到的总匹配数
-        """
-        self.statusBar().showMessage(f"搜索完成: {total_files} 个文件，找到 {total_matches} 个匹配项", 5000)
-
->>>>>>> 2d73859e9be1ea59efb0c323e0c214564a4d40ab
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

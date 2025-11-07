@@ -1,7 +1,6 @@
 import sys
 import os
 from PySide6.QtWidgets import QMenuBar, QMenu
-from PySide6.QtGui import QAction
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtCore import Signal
 
@@ -92,7 +91,7 @@ class MenuBar(QMenuBar):
         # 2.重复选择
         repeat_selection_action = QAction("&Repeat Selection", self)
         repeat_selection_action.setStatusTip("Repeat the last selection")
-        repeat_selection_action.setShortcut(QKeySequence.SelectAll) 
+        repeat_selection_action.setShortcut(QKeySequence("Ctrl+D")) 
         repeat_selection_action.triggered.connect(self.main_window._on_repeat_selection)
 
         # 3.选择所有匹配项
@@ -179,7 +178,7 @@ class MenuBar(QMenuBar):
         output_action.setStatusTip("Toggle Output Panel visibility")
         output_action.setShortcut(QKeySequence("Ctrl+Shift+U"))
         output_action.setCheckable(True) 
-        output_action.triggered.connect(self.main_window._on_toggle_word_wrap)
+        output_action.triggered.connect(self.main_window._on_toggle_output)
         view_menu.addAction(output_action)
 
         # 4. 自动换行 (Word Wrap)
@@ -191,6 +190,69 @@ class MenuBar(QMenuBar):
         view_menu.addAction(word_wrap_action)
 
         go_menu = self.addMenu("&Go")
+
+        # 1. 返回
+        go_back_action = QAction("&Back", self)
+        go_back_action.setStatusTip("Go back to the previous location")
+        go_back_action.setShortcut(QKeySequence("Alt+Left"))
+        go_back_action.triggered.connect(self.main_window._on_go_back)
+        go_menu.addAction(go_back_action)
+
+        # 2. 前进
+        go_forward_action = QAction("&Forward", self)
+        go_forward_action.setStatusTip("Go forward to the next location")
+        go_forward_action.setShortcut(QKeySequence("Alt+Right"))
+        go_forward_action.triggered.connect(self.main_window._on_go_forward)
+        go_menu.addAction(go_forward_action)
+
+        go_menu.addSeparator()
+
+        # 3. 转到类型定义
+        go_to_type_definition_action = QAction("Go to &Type Definition", self)
+        go_to_type_definition_action.setStatusTip("Go to the type definition")
+        go_to_type_definition_action.setShortcut(QKeySequence("Ctrl+Shift+F12"))
+        go_to_type_definition_action.triggered.connect(self.main_window._on_go_to_type_definition)
+        go_menu.addAction(go_to_type_definition_action)
+
+        # 4. 转到括号
+        go_to_bracket_action = QAction("Go to &Bracket", self)
+        go_to_bracket_action.setStatusTip("Go to the matching bracket")
+        go_to_bracket_action.setShortcut(QKeySequence("Ctrl+Shift+\\"))
+        go_to_bracket_action.triggered.connect(self.main_window._on_go_to_bracket)
+        go_menu.addAction(go_to_bracket_action)
+
+        go_menu.addSeparator()
+
+        # 5. 上一个问题
+        prev_problem_action = QAction("&Previous Problem", self)
+        prev_problem_action.setStatusTip("Go to the previous problem")
+        prev_problem_action.setShortcut(QKeySequence("F8"))
+        prev_problem_action.triggered.connect(self.main_window._on_prev_problem)
+        go_menu.addAction(prev_problem_action)
+
+        # 6. 下一个问题
+        next_problem_action = QAction("&Next Problem", self)
+        next_problem_action.setStatusTip("Go to the next problem")
+        next_problem_action.setShortcut(QKeySequence("F9"))
+        next_problem_action.triggered.connect(self.main_window._on_next_problem)
+        go_menu.addAction(next_problem_action)
+
+        go_menu.addSeparator()
+
+        # 7. 上一个更改
+        prev_change_action = QAction("Previous &Change", self)
+        prev_change_action.setStatusTip("Go to the previous change")
+        prev_change_action.setShortcut(QKeySequence("Alt+Shift+F3"))
+        prev_change_action.triggered.connect(self.main_window._on_prev_change)
+        go_menu.addAction(prev_change_action)
+
+        # 8. 下一个更改
+        next_change_action = QAction("Next C&hange", self)
+        next_change_action.setStatusTip("Go to the next change")
+        next_change_action.setShortcut(QKeySequence("Alt+F3"))
+        next_change_action.triggered.connect(self.main_window._on_next_change)
+        go_menu.addAction(next_change_action)
+
         run_menu = self.addMenu("&Run")
         
         # 1. 启动调试
