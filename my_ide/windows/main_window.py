@@ -1,10 +1,11 @@
 import sys
 import os
 from PySide6.QtWidgets import QApplication,QMainWindow,QPlainTextEdit,QFileDialog, QDockWidget, QHBoxLayout, QStackedWidget,QWidget
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction,QTextCursor
 from PySide6.QtCore import Qt
 from my_ide.components.file_tree import FileTreeWidget
 from my_ide.components.activity_bar import ActivityBar
+<<<<<<< HEAD
 from my_ide.components.menu_bar import MenuBar
 
 # --- B. (可选但推荐) 创建一个占位符搜索视图 ---
@@ -16,6 +17,9 @@ class SearchView(QWidget):
         # from PySide6.QtWidgets import QLabel, QVBoxLayout
         # layout = QVBoxLayout(self)
         # layout.addWidget(QLabel("搜索功能待实现"))
+=======
+from my_ide.components.search_panel import SearchPanel
+>>>>>>> 2d73859e9be1ea59efb0c323e0c214564a4d40ab
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -60,15 +64,17 @@ class MainWindow(QMainWindow):
         
     
     def _init_sidebar(self):
+        current_dir = os.getcwd()
+
         self.activity_bar = ActivityBar(self)
         self.stacked_widget = QStackedWidget(self)
 
         self.file_tree_view = FileTreeWidget(self)
-        self.search_panel = SearchView(self)
+        self.search_panel_view = SearchPanel(current_dir,self)
 
         self.views = {
             "resource_manager": self.file_tree_view,
-            "search_panel": self.search_panel
+            "search_panel": self.search_panel_view
         }
         self.stacked_widget.addWidget(self.views["resource_manager"])
         self.stacked_widget.addWidget(self.views["search_panel"])
@@ -89,9 +95,14 @@ class MainWindow(QMainWindow):
 
         self.activity_bar.view_changed.connect(self.switch_sidebar_view)
 
-        current_dir = os.getcwd()
+        # file_tree初始化
         self.file_tree_view.set_root_path(current_dir)
         self.file_tree_view.tree_view.doubleClicked.connect(self._on_file_double_clicked)
+
+        # search_panel初始化
+        self.search_panel_view.result_clicked.connect(self._on_search_result_clicked)
+        self.search_panel_view.error_found.connect(self._on_search_error_found)
+        self.search_panel_view.search_completed.connect(self._on_search_completed)
 
     def switch_sidebar_view(self, view_id):
         if view_id in self.views:
@@ -169,6 +180,7 @@ class MainWindow(QMainWindow):
                     self.statusBar().showMessage(f"保存文件失败: {str(e)}", 3000)
                     print(f"Error saving file: {e}")
     
+<<<<<<< HEAD
     def _on_edit_undo(self):
         """处理编辑撤销动作的槽函数"""
         self.editor.undo()
@@ -323,6 +335,44 @@ class MainWindow(QMainWindow):
         """处理运行以非调试模式运行动作的槽函数"""
         self.statusBar().showMessage("正在运行...", 3000)
         print("Console: 正在以非调试模式运行")
+=======
+    def _on_search_result_clicked(self, file_path, line_number):
+        """
+        处理搜索结果点击事件
+        参数: file_path - 点击的结果对应的文件路径
+              line_number - 点击的结果对应的行号
+        """
+        if self.current_file_path != file_path:
+            self._open_file(file_path)
+        # 定位到指定行号
+        if self.editor and self.current_file_path == file_path:
+            doucument = self.editor.document()
+            block = doucument.findBlockByNumber(line_number - 1)
+            if block.isValid():
+                cursor = QTextCursor(block)
+                self.editor.setTextCursor(cursor)
+                self.editor.setFocus()
+            else:
+                self.statusBar().showMessage(f"无法定位到指定行号 {line_number}", 3000)
+        else:
+            self.statusBar().showMessage("文本编辑器未初始化，无法定位行号", 3000)
+
+    def _on_search_error_found(self, error_message):
+        """
+        处理搜索过程中出现的错误
+        参数: error_message - 错误信息
+        """
+        self.statusBar().showMessage(f"搜索错误: {error_message}", 5000)
+    
+    def _on_search_completed(self, total_files, total_matches):
+        """
+        处理搜索完成事件
+        参数: total_files - 搜索的总文件数
+              total_matches - 找到的总匹配数
+        """
+        self.statusBar().showMessage(f"搜索完成: {total_files} 个文件，找到 {total_matches} 个匹配项", 5000)
+
+>>>>>>> 2d73859e9be1ea59efb0c323e0c214564a4d40ab
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
