@@ -29,33 +29,6 @@ class MainWindow(QMainWindow):
 
         self.show()
 
-
-    def _on_search_result_clicked(self, *args):
-        """
-        槽函数：处理搜索结果被点击的信号
-        *args 用于接收信号可能传递的任何参数（例如：文件路径、行号等）。
-        """
-        # 在这里实现点击搜索结果后的具体逻辑，
-        # 例如：打开文件并跳转到对应行。
-        print(f"Search result clicked with arguments: {args}")
-        pass # 实际代码实现
-
-    def _on_search_error_found(self, *args):
-        """
-        槽函数：处理搜索过程中发现错误时的信号。
-        """
-        print(f"Search error found: {args}")
-        self.statusBar().showMessage(f"搜索错误: {args[0] if args else '未知错误'}", 3000)
-        pass 
-
-    def _on_search_completed(self, *args):
-        """
-        槽函数：处理搜索完成时的信号。
-        """
-        print(f"Search completed: {args}")
-        self.statusBar().showMessage("搜索完成", 1500)
-        pass    
-
     def _init_editor(self):
         """
         初始化代码编辑器
@@ -194,7 +167,47 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     self.statusBar().showMessage(f"保存文件失败: {str(e)}", 3000)
                     print(f"Error saving file: {e}")
+
+    def _on_search_result_clicked(self, file_path, line_number,start_col,end_col):
+        """
+        处理搜索结果点击事件
+        参数: file_path - 点击的结果对应的文件路径
+              line_number - 点击的结果对应的行号
+        """
+        if self.current_file_path != file_path:
+            self._open_file(file_path)
+        # 定位到指定行号
+        if self.editor and self.current_file_path == file_path:
+            doucument = self.editor.document()
+            block = doucument.findBlockByNumber(line_number - 1)
+            if block.isValid():
+                cursor = QTextCursor(block)
+                cursor.movePosition(QTextCursor.Right, QTextCursor.MoveAnchor, start_col)
+                cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, end_col - start_col)
+                self.editor.setTextCursor(cursor)
+                self.editor.ensureCursorVisible()
+                self.editor.setFocus()
+            else:
+                self.statusBar().showMessage(f"无法定位到指定行号 {line_number}", 3000)
+        else:
+            self.statusBar().showMessage("文本编辑器未初始化，无法定位行号", 3000)
+
+    def _on_search_error_found(self, error_message):
+        """
+        处理搜索过程中出现的错误
+        参数: error_message - 错误信息
+        """
+        self.statusBar().showMessage(f"搜索错误: {error_message}", 5000)
     
+    def _on_search_completed(self, total_files, total_matches):
+        """
+        处理搜索完成事件
+        参数: total_files - 搜索的总文件数
+              total_matches - 找到的总匹配数
+        """
+        self.statusBar().showMessage(f"搜索完成: {total_files} 个文件，找到 {total_matches} 个匹配项", 5000)
+
+
     def _on_edit_undo(self):
         """处理编辑撤销动作的槽函数"""
         self.editor.undo()
