@@ -3,9 +3,11 @@ import os
 from PySide6.QtWidgets import QApplication,QMainWindow,QPlainTextEdit,QFileDialog, QDockWidget, QHBoxLayout, QStackedWidget,QWidget
 from PySide6.QtGui import QAction,QTextCursor
 from PySide6.QtCore import Qt
-from my_ide.components.file_tree import FileTreeWidget
-from my_ide.components.activity_bar import ActivityBar
-from my_ide.components.search_panel import SearchPanel
+from ..components.file_tree import FileTreeWidget
+from ..components.activity_bar import ActivityBar
+from ..components.menu_bar import MenuBar
+from ..components.search_panel import SearchPanel
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -45,30 +47,9 @@ class MainWindow(QMainWindow):
         """
         初始化菜单栏
         """
-        menuBar = self.menuBar()
-        file_menu = menuBar.addMenu("&File")
-
-        # --- 创建 "File" 菜单下的动作 (Actions) ---
-        # 1. 打开文件的动作
-        open_action = QAction("&Open", self)
-        open_action.setStatusTip("Open a file")
-        open_action.triggered.connect(self._on_file_open) 
-
-        # 2. 保存文件的动作
-        save_action = QAction("&Save", self)
-        save_action.setStatusTip("Save the current file")
-        save_action.triggered.connect(self._on_file_save)
-
-        # 3. 退出的动作
-        exit_action = QAction("&Exit", self)
-        exit_action.setStatusTip("Exit the application")
-        exit_action.triggered.connect(self.close)
-
-        # --- 将动作添加到 "File" 菜单中 ---
-        file_menu.addAction(open_action)
-        file_menu.addAction(save_action)
-        file_menu.addSeparator() # 添加一条分割线
-        file_menu.addAction(exit_action)
+        self.custom_menu_bar = MenuBar(self)
+        self.setMenuBar(self.custom_menu_bar)
+        
     
     def _init_sidebar(self):
         current_dir = os.getcwd()
@@ -186,7 +167,7 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     self.statusBar().showMessage(f"保存文件失败: {str(e)}", 3000)
                     print(f"Error saving file: {e}")
-    
+
     def _on_search_result_clicked(self, file_path, line_number,start_col,end_col):
         """
         处理搜索结果点击事件
@@ -226,6 +207,161 @@ class MainWindow(QMainWindow):
         """
         self.statusBar().showMessage(f"搜索完成: {total_files} 个文件，找到 {total_matches} 个匹配项", 5000)
 
+
+    def _on_edit_undo(self):
+        """处理编辑撤销动作的槽函数"""
+        self.editor.undo()
+        self.statusBar().showMessage("已执行: 撤销", 1500)
+        print("Console: 已执行撤销操作")
+
+    def _on_edit_redo(self):
+        """处理编辑恢复动作的槽函数"""
+        self.editor.redo()
+        self.statusBar().showMessage("已执行: 恢复", 1500)
+        print("Console: 已执行恢复操作")
+
+    def _on_edit_cut(self):
+        """处理编辑剪切动作的槽函数"""
+        self.editor.cut()
+        self.statusBar().showMessage("已执行: 剪切", 1500)
+        print("Console: 已执行剪切操作")
+
+    def _on_edit_copy(self):
+        """处理编辑复制动作的槽函数"""
+        self.editor.copy()
+        self.statusBar().showMessage("已执行: 复制", 1500)
+        print("Console: 已执行复制操作")
+
+    def _on_edit_paste(self):
+        """处理编辑粘贴动作的槽函数"""
+        self.editor.paste()
+        self.statusBar().showMessage("已执行: 粘贴", 1500)
+        print("Console: 已执行粘贴操作")
+
+    def _on_select_all(self):
+        """处理选择全选动作的槽函数"""
+        self.editor.selectAll()
+        self.statusBar().showMessage("已执行: 全选", 1500)
+        print("Console: 已执行全选操作")
+
+    def _on_repeat_selection(self):
+        """处理选择重复选择动作的槽函数"""
+        self.statusBar().showMessage("功能待实现: 重复选择", 1500)
+        print("Console: 正在执行重复选择操作...")
+
+    def _on_select_all_matches(self):
+        """处理选择所有匹配项动作的槽函数"""
+        self.statusBar().showMessage("功能待实现: 选择所有匹配项", 1500)
+        print("Console: 正在执行选择所有匹配项操作...")
+
+    def _on_toggle_fullscreen(self):
+        """处理查看外观里全屏动作的槽函数"""
+        if self.isFullScreen():
+            self.showNormal()
+            self.statusBar().showMessage("已退出全屏模式", 1500)
+            print("Console: 已退出全屏")
+        else:
+            self.showFullScreen()
+            self.statusBar().showMessage("已进入全屏模式", 1500)
+            print("Console: 已进入全屏")
+
+    def _on_toggle_menubar(self):
+        """处理查看外观里菜单栏可见性动作的槽函数"""
+        is_visible = self.menuBar().isVisible()
+        self.menuBar().setVisible(not is_visible)
+        self.statusBar().showMessage(f"菜单栏 {'已隐藏' if is_visible else '已显示'}", 1500)
+        print(f"Console: 菜单栏可见性切换为 {not is_visible}")
+
+    def _on_toggle_sidebar(self):
+        """处理查看外观里主侧边栏可见性动作的槽函数"""
+        is_visible = self.sidebar_dock.isVisible()
+        self.sidebar_dock.setVisible(not is_visible)
+        self.statusBar().showMessage(f"侧边栏 {'已隐藏' if is_visible else '已显示'}", 1500)
+        print(f"Console: 侧边栏可见性切换为 {not is_visible}")
+
+    def _on_zoom_in(self):
+        """处理查看外观里放大编辑器字体动作的槽函数"""
+        self.editor.zoomIn(1) 
+        self.statusBar().showMessage("已放大", 1500)
+        print("Console: 放大字体")
+
+    def _on_zoom_out(self):
+        """处理查看外观里缩小编辑器字体的槽函数"""
+        self.editor.zoomOut(1) 
+        self.statusBar().showMessage("已缩小", 1500)
+        print("Console: 缩小字体")
+
+    def _on_set_editor_layout(self, layout_type):
+        """处理查看编辑器布局动作的槽函数"""
+        self.statusBar().showMessage(f"功能待实现: 设置编辑器布局为 {layout_type}", 1500)
+        print(f"Console: 尝试设置编辑器布局为 {layout_type}")
+
+    def _on_toggle_output(self):
+        """处理查看输出动作的槽函数"""
+        self.statusBar().showMessage("功能待实现: 切换输出面板", 1500)
+        print("Console: 尝试切换输出面板可见性")
+        
+    def _on_toggle_word_wrap(self):
+        """处理查看自动换行动作的槽函数"""
+        current_mode = self.editor.wordWrapMode()
+        if current_mode == QPlainTextEdit.WidgetWidth:
+            self.editor.setWordWrapMode(QPlainTextEdit.NoWrap)
+            self.statusBar().showMessage("已关闭自动换行", 1500)
+            print("Console: 自动换行已关闭")
+        else:
+            self.editor.setWordWrapMode(QPlainTextEdit.WidgetWidth)
+            self.statusBar().showMessage("已开启自动换行", 1500)
+            print("Console: 自动换行已开启")
+
+    def _on_go_back(self):
+        """处理转到里返回动作的槽函数"""
+        self.statusBar().showMessage("功能待实现: 返回上一个位置", 1500)
+        print("Console: 正在执行返回操作...")
+        
+    def _on_go_forward(self):
+        """处理转到里前进动作的槽函数"""
+        self.statusBar().showMessage("功能待实现: 前进到下一个位置", 1500)
+        print("Console: 正在执行前进操作...")
+        
+    def _on_go_to_type_definition(self):
+        """处理转到类型定义动作的槽函数"""
+        self.statusBar().showMessage("功能待实现: 转到类型定义", 1500)
+        print("Console: 正在执行转到类型定义操作...")
+        
+    def _on_go_to_bracket(self):
+        """处理转到括号动作的槽函数"""
+        self.statusBar().showMessage("功能待实现: 转到匹配的括号", 1500)
+        print("Console: 正在执行转到括号操作...")
+        
+    def _on_prev_problem(self):
+        """处理转到上一个问题动作的槽函数"""
+        self.statusBar().showMessage("功能待实现: 上一个问题", 1500)
+        print("Console: 正在执行上一个问题操作...")
+        
+    def _on_next_problem(self):
+        """处理转到下一个问题动作的槽函数"""
+        self.statusBar().showMessage("功能待实现: 下一个问题", 1500)
+        print("Console: 正在执行下一个问题操作...")
+
+    def _on_prev_change(self):
+        """处理转到上一个更改动作的槽函数"""
+        self.statusBar().showMessage("功能待实现: 上一个更改", 1500)
+        print("Console: 正在执行上一个更改操作...")
+
+    def _on_next_change(self):
+        """处理转到下一个更改动作的槽函数"""
+        self.statusBar().showMessage("功能待实现: 下一个更改", 1500)
+        print("Console: 正在执行下一个更改操作...")
+
+    def _on_start_debugging(self):
+        """处理运行启动调试动作的槽函数"""
+        self.statusBar().showMessage("正在调试...", 3000)
+        print("Console: 正在启动调试")
+
+    def _on_run_without_debugging(self):
+        """处理运行以非调试模式运行动作的槽函数"""
+        self.statusBar().showMessage("正在运行...", 3000)
+        print("Console: 正在以非调试模式运行")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
