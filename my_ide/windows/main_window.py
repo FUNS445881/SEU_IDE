@@ -89,6 +89,9 @@ class MainWindow(QMainWindow):
         self.views["resource_manager"].set_root_path(current_dir)
         self.views["resource_manager"].tree_view.doubleClicked.connect(self._on_file_double_clicked)
 
+        # TODO 需要优化
+        self.views["resource_manager"].new_file_clicked.connect(self._on_new_file)
+        self.views["resource_manager"].new_folder_clicked.connect(self._on_new_folder)
         # search_panel初始化
         self.views["search_panel"].result_clicked.connect(self._on_search_result_clicked)
         self.views["search_panel"].error_found.connect(self._on_search_error_found)
@@ -123,6 +126,68 @@ class MainWindow(QMainWindow):
             "toggle_menubar": self._on_toggle_menubar,
             "toggle_sidebar": self._on_toggle_sidebar,
         }
+
+    def _on_new_file(self):
+        """处理文件树中新建文件按钮点击的槽函数"""
+        # 1. 确定要在哪个目录下新建
+        selected_path = self.file_tree_view.get_selected_file_path()
+        if not selected_path or os.path.isfile(selected_path):
+            # 如果没选中任何东西，或选中了一个文件，则使用根路径
+            current_dir = self.file_tree_view.model.filePath(self.file_tree_view.tree_view.rootIndex())
+        else:
+            # 如果选中了一个文件夹，则使用这个文件夹
+            current_dir = selected_path
+
+        # 2. 弹出输入框获取新文件名
+        file_name, ok = QInputDialog.getText(self, "新建文件", "输入文件名:", QLineEdit.Normal, "untitled.txt")
+        
+        if ok and file_name:
+            new_file_path = os.path.join(current_dir, file_name)
+            try:
+                # 3. 创建空文件
+                with open(new_file_path, 'w', encoding='utf-8') as f:
+                    f.write("")
+                
+                self.statusBar().showMessage(f"已创建文件: {file_name}", 3000)
+                # 4. 刷新文件树视图 (QFileSystemModel 会自动刷新，但最好确保)
+                self.file_tree_view.model.refresh(self.file_tree_view.model.index(current_dir))
+                # 可选：展开到新建文件的父目录
+                self.file_tree_view.expand_to_path(current_dir) 
+                
+            except Exception as e:
+                self.statusBar().showMessage(f"创建文件失败: {str(e)}", 3000)
+                print(f"Error creating file: {e}")
+
+
+    def _on_new_folder(self):
+        """处理文件树中新建文件夹按钮点击的槽函数"""
+        # 1. 确定要在哪个目录下新建
+        selected_path = self.file_tree_view.get_selected_file_path()
+        if not selected_path or os.path.isfile(selected_path):
+            # 如果没选中任何东西，或选中了一个文件，则使用根路径
+            current_dir = self.file_tree_view.model.filePath(self.file_tree_view.tree_view.rootIndex())
+        else:
+            # 如果选中了一个文件夹，则使用这个文件夹
+            current_dir = selected_path
+
+        # 2. 弹出输入框获取新文件夹名
+        folder_name, ok = QInputDialog.getText(self, "新建文件夹", "输入文件夹名:", QLineEdit.Normal, "New Folder")
+        
+        if ok and folder_name:
+            new_folder_path = os.path.join(current_dir, folder_name)
+            try:
+                # 3. 创建文件夹 (支持多级创建)
+                os.makedirs(new_folder_path, exist_ok=True)
+                
+                self.statusBar().showMessage(f"已创建文件夹: {folder_name}", 3000)
+                # 4. 刷新文件树视图
+                self.file_tree_view.model.refresh(self.file_tree_view.model.index(current_dir))
+                # 可选：展开到新建文件夹
+                self.file_tree_view.expand_to_path(new_folder_path) 
+                
+            except Exception as e:
+                self.statusBar().showMessage(f"创建文件夹失败: {str(e)}", 3000)
+                print(f"Error creating folder: {e}")
 
     def switch_sidebar_view(self, view_id):
         if view_id in self.views:
