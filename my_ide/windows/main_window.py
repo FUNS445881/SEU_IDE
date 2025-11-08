@@ -1,7 +1,7 @@
 import sys
 import os
 from PySide6.QtWidgets import QApplication,QMainWindow,QPlainTextEdit,QFileDialog, QDockWidget, QHBoxLayout, QStackedWidget,QWidget
-from PySide6.QtGui import QAction,QTextCursor
+from PySide6.QtGui import QAction,QTextCursor,QTextOption
 from PySide6.QtCore import Qt
 from ..components.file_tree import FileTreeWidget
 from ..components.activity_bar import ActivityBar
@@ -49,6 +49,7 @@ class MainWindow(QMainWindow):
         """
         self.custom_menu_bar = MenuBar(self)
         self.setMenuBar(self.custom_menu_bar)
+        self.custom_menu_bar.action_triggered.connect(self._handle_menu_action)
         
     
     def _init_sidebar(self):
@@ -207,6 +208,8 @@ class MainWindow(QMainWindow):
         """
         self.statusBar().showMessage(f"搜索完成: {total_files} 个文件，找到 {total_matches} 个匹配项", 5000)
 
+    def _handle_menu_action(self, action: str):
+        pass
 
     def _on_edit_undo(self):
         """处理编辑撤销动作的槽函数"""
@@ -244,7 +247,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("已执行: 全选", 1500)
         print("Console: 已执行全选操作")
 
-    def _on_repeat_selection(self):
+    def _on_select_repeat(self):
         """处理选择重复选择动作的槽函数"""
         self.statusBar().showMessage("功能待实现: 重复选择", 1500)
         print("Console: 正在执行重复选择操作...")
@@ -304,12 +307,12 @@ class MainWindow(QMainWindow):
     def _on_toggle_word_wrap(self):
         """处理查看自动换行动作的槽函数"""
         current_mode = self.editor.wordWrapMode()
-        if current_mode == QPlainTextEdit.WidgetWidth:
-            self.editor.setWordWrapMode(QPlainTextEdit.NoWrap)
+        if current_mode == QTextOption.WrapAtWordBoundaryOrAnywhere:
+            self.editor.setWordWrapMode(QTextOption.NoWrap)
             self.statusBar().showMessage("已关闭自动换行", 1500)
             print("Console: 自动换行已关闭")
         else:
-            self.editor.setWordWrapMode(QPlainTextEdit.WidgetWidth)
+            self.editor.setWordWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
             self.statusBar().showMessage("已开启自动换行", 1500)
             print("Console: 自动换行已开启")
 
