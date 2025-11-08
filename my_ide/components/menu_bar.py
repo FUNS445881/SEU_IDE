@@ -53,7 +53,7 @@ class MenuBar(QMenuBar):
         self._add_action(appearance_menu,"&Reset Zoom","zoom_reset","Reset editor zoom level","Ctrl+0")
         self._add_action(appearance_menu,"Zoom &In","zoom_in","Increase editor zoom level","Ctrl+=")
         self._add_action(appearance_menu,"Zoom &Out","zoom_out","Decrease editor zoom level","Ctrl+-")
-        view_menu.addSeparator() 
+        appearance_menu.addSeparator() 
 
         # 主题切换    
         self._add_action(appearance_menu,"Dark &Theme","toggle_dark_theme","Toggle Dark Theme","",is_checkable=True)
