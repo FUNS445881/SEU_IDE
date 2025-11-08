@@ -1,19 +1,21 @@
 import sys
 import os
-from PySide6.QtWidgets import QApplication,QMainWindow,QPlainTextEdit,QFileDialog, QDockWidget, QHBoxLayout, QStackedWidget,QWidget
+from PySide6.QtWidgets import (QApplication,QMainWindow,QPlainTextEdit,QFileDialog, QDockWidget, 
+                                QHBoxLayout, QStackedWidget, QWidget)
 from PySide6.QtGui import QAction,QTextCursor,QTextOption
 from PySide6.QtCore import Qt
-from ..components.file_tree import FileTreeWidget
-from ..components.activity_bar import ActivityBar
-from ..components.menu_bar import MenuBar
-from ..components.search_panel import SearchPanel
-
+from my_ide.components.file_tree import FileTreeWidget
+from my_ide.components.activity_bar import ActivityBar
+from my_ide.components.menu_bar import MenuBar
+from my_ide.components.search_panel import SearchPanel
+from my_ide.controllers.editor_controller import EditorController
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.current_file_path = None  # 跟踪当前打开的文件路径
         self.init_ui()
+        self._init_controller()
     
     def init_ui(self):
         """
@@ -51,7 +53,6 @@ class MainWindow(QMainWindow):
         self.setMenuBar(self.custom_menu_bar)
         self.custom_menu_bar.action_triggered.connect(self._handle_menu_action)
         
-    
     def _init_sidebar(self):
         current_dir = os.getcwd()
 
@@ -85,13 +86,43 @@ class MainWindow(QMainWindow):
         self.activity_bar.view_changed.connect(self.switch_sidebar_view)
 
         # file_tree初始化
-        self.file_tree_view.set_root_path(current_dir)
-        self.file_tree_view.tree_view.doubleClicked.connect(self._on_file_double_clicked)
+        self.views["resource_manager"].set_root_path(current_dir)
+        self.views["resource_manager"].tree_view.doubleClicked.connect(self._on_file_double_clicked)
 
         # search_panel初始化
-        self.search_panel_view.result_clicked.connect(self._on_search_result_clicked)
-        self.search_panel_view.error_found.connect(self._on_search_error_found)
-        self.search_panel_view.search_completed.connect(self._on_search_completed)
+        self.views["search_panel"].result_clicked.connect(self._on_search_result_clicked)
+        self.views["search_panel"].error_found.connect(self._on_search_error_found)
+        self.views["search_panel"].search_completed.connect(self._on_search_completed)
+
+    def _init_controller(self):
+        """
+        初始化各个控制器
+        """
+        self.editor_controller = EditorController(self.editor)
+
+        self.action_handlers = {
+            # File actions 不用controller的原因是因为他们和main_window高度绑定
+            "file_open": self._on_file_open,
+            "file_open_folder": self._on_file_folder_open,
+            "file_new": lambda: self.statusBar().showMessage("待实现，新建文件", 3000),
+            "file_new_folder": lambda: self.statusBar().showMessage("待实现，新建文件夹", 3000),
+            "file_save": self._on_file_save,
+            "file_exit": self.close,
+            # Editor actions
+            "edit_undo": self.editor_controller.undo,
+            "edit_redo": self.editor_controller.redo,
+            "edit_cut": self.editor_controller.cut,
+            "edit_copy": self.editor_controller.copy,
+            "edit_paste": self.editor_controller.paste,
+            "edit_find": self._show_find_dialog,
+            "select_all": self.editor_controller.select_all,
+            "zoom_in": self.editor_controller.zoom_in,
+            "zoom_out": self.editor_controller.zoom_out,
+
+            "toggle_fullscreen": self._on_toggle_fullscreen,
+            "toggle_menubar": self._on_toggle_menubar,
+            "toggle_sidebar": self._on_toggle_sidebar,
+        }
 
     def switch_sidebar_view(self, view_id):
         if view_id in self.views:
@@ -120,23 +151,25 @@ class MainWindow(QMainWindow):
                 content = file.read()
                 self.editor.setPlainText(content)
                 self.current_file_path = file_path
-                self.setWindowTitle(f"My IDE - {file_path}")
                 self.statusBar().showMessage(f"已打开文件: {file_path}", 3000)
         except Exception as e:
             self.statusBar().showMessage(f"打开文件失败: {str(e)}", 3000)
             print(f"Error opening file: {e}")
 
-    def _on_file_double_clicked(self, index):
-        """
-        处理文件树中文件双击事件
-        参数: index - 文件树中双击的项的索引
-        """
-        # 从模型中获取文件路径
-        file_path = self.file_tree_view.model.filePath(index)
+    def _on_file_folder_open(self):
+        """处理文件夹打开动作的槽函数"""
+        folder_path = QFileDialog.getExistingDirectory(
+            self,  # 父窗口
+            "打开文件夹",  # 对话框标题
+            ""  # 默认目录
+        )
         
-        # 检查是否是文件（非目录）
-        if os.path.isfile(file_path):
-            self._open_file(file_path)
+        if folder_path:
+            self.views["resource_manager"].set_root_path(folder_path)
+            self.views["search_panel"].set_search_root(folder_path)
+            self.editor.clear()
+            self.current_file_path = None
+            self.statusBar().showMessage(f"已打开文件夹: {folder_path}", 3000)
 
     def _on_file_save(self):
         """处理文件保存动作的槽函数"""
@@ -168,6 +201,18 @@ class MainWindow(QMainWindow):
                 except Exception as e:
                     self.statusBar().showMessage(f"保存文件失败: {str(e)}", 3000)
                     print(f"Error saving file: {e}")
+
+    def _on_file_double_clicked(self, index):
+        """
+        处理文件树中文件双击事件
+        参数: index - 文件树中双击的项的索引
+        """
+        # 从模型中获取文件路径
+        file_path = self.views["resource_manager"].model.filePath(index)
+        
+        # 检查是否是文件（非目录）
+        if os.path.isfile(file_path):
+            self._open_file(file_path)
 
     def _on_search_result_clicked(self, file_path, line_number,start_col,end_col):
         """
@@ -209,48 +254,11 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"搜索完成: {total_files} 个文件，找到 {total_matches} 个匹配项", 5000)
 
     def _handle_menu_action(self, action: str):
-        pass
-
-    def _on_edit_undo(self):
-        """处理编辑撤销动作的槽函数"""
-        self.editor.undo()
-        self.statusBar().showMessage("已执行: 撤销", 1500)
-        print("Console: 已执行撤销操作")
-
-    def _on_edit_redo(self):
-        """处理编辑恢复动作的槽函数"""
-        self.editor.redo()
-        self.statusBar().showMessage("已执行: 恢复", 1500)
-        print("Console: 已执行恢复操作")
-
-    def _on_edit_cut(self):
-        """处理编辑剪切动作的槽函数"""
-        self.editor.cut()
-        self.statusBar().showMessage("已执行: 剪切", 1500)
-        print("Console: 已执行剪切操作")
-
-    def _on_edit_copy(self):
-        """处理编辑复制动作的槽函数"""
-        self.editor.copy()
-        self.statusBar().showMessage("已执行: 复制", 1500)
-        print("Console: 已执行复制操作")
-
-    def _on_edit_paste(self):
-        """处理编辑粘贴动作的槽函数"""
-        self.editor.paste()
-        self.statusBar().showMessage("已执行: 粘贴", 1500)
-        print("Console: 已执行粘贴操作")
-
-    def _on_select_all(self):
-        """处理选择全选动作的槽函数"""
-        self.editor.selectAll()
-        self.statusBar().showMessage("已执行: 全选", 1500)
-        print("Console: 已执行全选操作")
-
-    def _on_select_repeat(self):
-        """处理选择重复选择动作的槽函数"""
-        self.statusBar().showMessage("功能待实现: 重复选择", 1500)
-        print("Console: 正在执行重复选择操作...")
+        handler = self.action_handlers.get(action)
+        if handler and callable(handler):
+            handler()
+        else:
+            print(f"警告：没有为动作 '{action}' 找到处理函数。")
 
     def _on_select_all_matches(self):
         """处理选择所有匹配项动作的槽函数"""
@@ -282,22 +290,9 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"侧边栏 {'已隐藏' if is_visible else '已显示'}", 1500)
         print(f"Console: 侧边栏可见性切换为 {not is_visible}")
 
-    def _on_zoom_in(self):
-        """处理查看外观里放大编辑器字体动作的槽函数"""
-        self.editor.zoomIn(1) 
-        self.statusBar().showMessage("已放大", 1500)
-        print("Console: 放大字体")
-
-    def _on_zoom_out(self):
-        """处理查看外观里缩小编辑器字体的槽函数"""
-        self.editor.zoomOut(1) 
-        self.statusBar().showMessage("已缩小", 1500)
-        print("Console: 缩小字体")
-
-    def _on_set_editor_layout(self, layout_type):
-        """处理查看编辑器布局动作的槽函数"""
-        self.statusBar().showMessage(f"功能待实现: 设置编辑器布局为 {layout_type}", 1500)
-        print(f"Console: 尝试设置编辑器布局为 {layout_type}")
+    def _show_find_dialog(self):
+        """显示查找对话框"""
+        pass
 
     def _on_toggle_output(self):
         """处理查看输出动作的槽函数"""
@@ -345,16 +340,6 @@ class MainWindow(QMainWindow):
         """处理转到下一个问题动作的槽函数"""
         self.statusBar().showMessage("功能待实现: 下一个问题", 1500)
         print("Console: 正在执行下一个问题操作...")
-
-    def _on_prev_change(self):
-        """处理转到上一个更改动作的槽函数"""
-        self.statusBar().showMessage("功能待实现: 上一个更改", 1500)
-        print("Console: 正在执行上一个更改操作...")
-
-    def _on_next_change(self):
-        """处理转到下一个更改动作的槽函数"""
-        self.statusBar().showMessage("功能待实现: 下一个更改", 1500)
-        print("Console: 正在执行下一个更改操作...")
 
     def _on_start_debugging(self):
         """处理运行启动调试动作的槽函数"""

@@ -16,8 +16,9 @@ class MenuBar(QMenuBar):
 
         file_menu = self.addMenu("&File")
         self._add_action(file_menu,"&Open","file_open","Open a file","Ctrl+O")
-        self._add_action(file_menu,"&Open Folder","file_open_folder","Open a folder","Ctrl+K Ctrl+O")
+        self._add_action(file_menu,"&Open Folder","file_open_folder","Open a folder","Ctrl+Shift+O")
         self._add_action(file_menu,"&New","file_new","Create a new file","Ctrl+N")
+        self._add_action(file_menu,"&New Folder","file_new_folder","Create a new folder","Ctrl+Shift+N")
         self._add_action(file_menu,"&Save","file_save","Save the current file","Ctrl+S")
         file_menu.addSeparator() # 添加一条分割线
         self._add_action(file_menu,"&Exit","file_exit","Exit the application","Ctrl+Q")
@@ -36,8 +37,6 @@ class MenuBar(QMenuBar):
         select_menu = self.addMenu("Selec&t")
         self._add_action(select_menu,"&Select All","select_all","Select all content","Ctrl+A")
         select_menu.addSeparator() 
-        self._add_action(select_menu,"&Repeat Selection","select_repeat","Repeat the last selection","Ctrl+D")
-        select_menu.addSeparator() 
         self._add_action(select_menu,"&Select All Matches","select_all_matches","Select all items matching the current selection","Ctrl+Shift+L")
 
         view_menu = self.addMenu("&View")
@@ -52,19 +51,14 @@ class MenuBar(QMenuBar):
 
         # 重置&放大&缩小
         self._add_action(appearance_menu,"&Reset Zoom","zoom_reset","Reset editor zoom level","Ctrl+0")
-        self._add_action(appearance_menu,"Zoom &In","zoom_in","Increase editor zoom level","Ctrl++")
+        self._add_action(appearance_menu,"Zoom &In","zoom_in","Increase editor zoom level","Ctrl+=")
         self._add_action(appearance_menu,"Zoom &Out","zoom_out","Decrease editor zoom level","Ctrl+-")
+        view_menu.addSeparator() 
 
+        # 主题切换    
+        self._add_action(appearance_menu,"Dark &Theme","toggle_dark_theme","Toggle Dark Theme","",is_checkable=True)
+        
         view_menu.addMenu(appearance_menu)
-
-        # 创建 "Editor Layout"子菜单
-        editor_layout_menu = QMenu("Editor &Layout", self)
-
-        # 单列&双列
-        self._add_action(editor_layout_menu,"&Single","set_single_column","Use a single editor column layout")
-        self._add_action(editor_layout_menu,"&Two Columns","set_two_columns","Use a two editor column layout")
-    
-        view_menu.addMenu(editor_layout_menu)
         view_menu.addSeparator() 
 
         # 3. 输出 (Output)
@@ -89,10 +83,6 @@ class MenuBar(QMenuBar):
         # 6. 下一个问题
         self._add_action(go_menu,"&Next Problem","next_problem","Go to the next problem","F9")
         go_menu.addSeparator()
-        # 7. 上一个更改
-        self._add_action(go_menu,"&Previous Change","prev_change","Go to the previous change","Alt+Shift+F3")
-        # 8. 下一个更改
-        self._add_action(go_menu,"&Next CChange","next_change","Go to the next change","Alt+F3")
 
         run_menu = self.addMenu("&Run")
         # 1. 启动调试
@@ -113,6 +103,3 @@ class MenuBar(QMenuBar):
         action.triggered.connect(lambda: self.action_triggered.emit(action_name))
         menu.addAction(action)
         return action
-
-
-

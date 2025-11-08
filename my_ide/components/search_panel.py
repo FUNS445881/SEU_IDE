@@ -273,7 +273,6 @@ class SearchPanel(QWidget):
             line_number = 1
             self.result_clicked.emit(file_path, line_number, 0, 0)
 
-
     def _on_thread_finished(self):
         """
         线程完全结束后调用的槽函数，用于清理python引用
@@ -282,3 +281,9 @@ class SearchPanel(QWidget):
         self.search_worker = None
         print("搜索线程已完全结束")
 
+    def set_search_root(self, folder_path):
+        """
+        设置搜索根目录
+        """
+        self.root_path = folder_path
+        print(f"搜索根目录已设置为: {folder_path}")
