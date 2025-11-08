@@ -118,7 +118,7 @@ class MainWindow(QMainWindow):
             "select_all": self.editor_controller.select_all,
             "zoom_in": self.editor_controller.zoom_in,
             "zoom_out": self.editor_controller.zoom_out,
-
+            "zoom_reset": self.editor_controller.zoom_reset,
             "toggle_fullscreen": self._on_toggle_fullscreen,
             "toggle_menubar": self._on_toggle_menubar,
             "toggle_sidebar": self._on_toggle_sidebar,

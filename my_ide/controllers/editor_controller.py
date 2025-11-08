@@ -11,6 +11,7 @@ class EditorController:
         self.last_search_results = []
         self.current_search_index = -1
 
+
     def undo(self):
         """撤销上一步操作"""
         self.editor.undo()
@@ -34,6 +35,10 @@ class EditorController:
     def select_all(self):
         """全选内容"""
         self.editor.selectAll()
+
+    def zoom_reset(self):
+        """重置编辑器缩放比例"""
+        
 
     def zoom_in(self):
         """放大编辑器内容"""
