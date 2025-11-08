@@ -1,6 +1,6 @@
 import sys
 import os
-from PySide6.QtWidgets import QApplication,QMainWindow,QPlainTextEdit,QFileDialog, QDockWidget, QHBoxLayout, QStackedWidget,QWidget
+from PySide6.QtWidgets import QApplication,QMainWindow,QPlainTextEdit,QFileDialog, QDockWidget, QHBoxLayout, QStackedWidget,QWidget,QInputDialog,QLineEdit
 from PySide6.QtCore import Qt
 from ..components.file_tree import FileTreeWidget
 from ..components.activity_bar import ActivityBar

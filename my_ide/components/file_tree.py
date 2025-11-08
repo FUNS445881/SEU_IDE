@@ -35,15 +35,14 @@ class FileTreeWidget(QWidget):
 
         current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(os.path.dirname(current_dir))
-        resources_dir = os.path.join(project_root, "resources", "activity_bar")
         
-        file_icon_path = os.path.join(resources_dir, "new_file.png")
-        folder_icon_path = os.path.join(resources_dir, "new_folder.png")
+        file_icon_path = "./my_ide/resources/activity_bar/new_file.png"
+        folder_icon_path = "./my_ide/resources/activity_bar/new_folder.png"
 
-        print(f"文件图标路径: {file_icon_path}")
-        print(f"文件图标存在: {os.path.exists(file_icon_path)}")
-        print(f"文件夹图标路径: {folder_icon_path}")
-        print(f"文件夹图标存在: {os.path.exists(folder_icon_path)}")
+        # print(f"文件图标路径: {file_icon_path}")
+        # print(f"文件图标存在: {os.path.exists(file_icon_path)}")
+        # print(f"文件夹图标路径: {folder_icon_path}")
+        # print(f"文件夹图标存在: {os.path.exists(folder_icon_path)}")
 
         self.new_file_button.setIcon(QIcon(file_icon_path))
         self.new_file_button.setToolTip("新建文件")
