@@ -67,22 +67,21 @@ class MenuBar(QMenuBar):
         self._add_action(view_menu,"Word &Wrap","toggle_word_wrap","Toggle Word Wrap","Alt+Z",is_checkable=True)
 
 
-        go_menu = self.addMenu("&Go")
-
-        # 1. 返回
-        self._add_action(go_menu,"&Back","go_back","Go back to the previous location","Alt+Left")
-        # 2. 前进
-        self._add_action(go_menu,"&Forward","go_forward","Go forward to the next location","Alt+Right")
-        go_menu.addSeparator()
-        # 3. 转到类型定义
-        self._add_action(go_menu,"&Type Definition","go_to_type_definition","Go to the type definition","Ctrl+Shift+F12")
-        self._add_action(go_menu,"&Bracket","go_to_bracket","Go to the matching bracket","Ctrl+Shift+\\")
-        go_menu.addSeparator()
-        # 5. 上一个问题
-        self._add_action(go_menu,"&Previous Problem","prev_problem","Go to the previous problem","F8")
-        # 6. 下一个问题
-        self._add_action(go_menu,"&Next Problem","next_problem","Go to the next problem","F9")
-        go_menu.addSeparator()
+        # go_menu = self.addMenu("&Go")
+        # # 1. 返回
+        # self._add_action(go_menu,"&Back","go_back","Go back to the previous location","Alt+Left")
+        # # 2. 前进
+        # self._add_action(go_menu,"&Forward","go_forward","Go forward to the next location","Alt+Right")
+        # go_menu.addSeparator()
+        # # 3. 转到类型定义
+        # self._add_action(go_menu,"&Type Definition","go_to_type_definition","Go to the type definition","Ctrl+Shift+F12")
+        # self._add_action(go_menu,"&Bracket","go_to_bracket","Go to the matching bracket","Ctrl+Shift+\\")
+        # go_menu.addSeparator()
+        # # 5. 上一个问题
+        # self._add_action(go_menu,"&Previous Problem","prev_problem","Go to the previous problem","F8")
+        # # 6. 下一个问题
+        # self._add_action(go_menu,"&Next Problem","next_problem","Go to the next problem","F9")
+        # go_menu.addSeparator()
 
         run_menu = self.addMenu("&Run")
         self._add_action(run_menu,"Run Without &Debugging","run_without_debugging","Run Without Debugging","Ctrl+F5")

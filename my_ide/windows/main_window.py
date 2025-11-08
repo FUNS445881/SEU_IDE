@@ -127,6 +127,7 @@ class MainWindow(QMainWindow):
             "zoom_in": self.editor_controller.zoom_in,
             "zoom_out": self.editor_controller.zoom_out,
             "zoom_reset": self.editor_controller.zoom_reset,
+            "toggle_word_wrap": self.editor_controller.toggle_word_wrap,
             "toggle_fullscreen": self._on_toggle_fullscreen,
             "toggle_sidebar": self._on_toggle_sidebar,
             "toggle_dark_theme": self._on_toggle_dark_theme,
@@ -380,7 +381,6 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("已进入全屏模式", 1500)
             print("Console: 已进入全屏")
 
-
     def _on_toggle_sidebar(self):
         """处理查看外观里主侧边栏可见性动作的槽函数"""
         is_visible = self.sidebar_dock.isVisible()
@@ -397,18 +397,6 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("功能待实现: 切换输出面板", 1500)
         print("Console: 尝试切换输出面板可见性")
         
-    def _on_toggle_word_wrap(self):
-        """处理查看自动换行动作的槽函数"""
-        current_mode = self.editor.wordWrapMode()
-        if current_mode == QTextOption.WrapAtWordBoundaryOrAnywhere:
-            self.editor.setWordWrapMode(QTextOption.NoWrap)
-            self.statusBar().showMessage("已关闭自动换行", 1500)
-            print("Console: 自动换行已关闭")
-        else:
-            self.editor.setWordWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
-            self.statusBar().showMessage("已开启自动换行", 1500)
-            print("Console: 自动换行已开启")
-
     def _on_go_back(self):
         """处理转到里返回动作的槽函数"""
         self.statusBar().showMessage("功能待实现: 返回上一个位置", 1500)

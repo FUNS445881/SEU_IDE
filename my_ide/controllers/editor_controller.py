@@ -48,6 +48,16 @@ class EditorController:
         """缩小编辑器内容"""
         self.editor.zoomOut()
 
+    def toggle_word_wrap(self):
+        """切换自动换行"""
+        current_state = self.editor.wordWrapMode()
+        if current_state == QTextOption.WrapAtWordBoundaryOrAnywhere:
+            self.editor.setWordWrapMode(QTextOption.NoWrap)
+            print("Console: 自动换行已关闭")
+        else:
+            self.editor.setWordWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
+            print("Console: 自动换行已开启")
+
     def edit_find(self, term, case_sensitive=False, whole_word=False):
         """查找功能的实现"""
         if not term:
