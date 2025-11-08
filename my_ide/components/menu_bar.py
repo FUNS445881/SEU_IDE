@@ -20,6 +20,7 @@ class MenuBar(QMenuBar):
         self._add_action(file_menu,"&New","file_new","Create a new file","Ctrl+N")
         self._add_action(file_menu,"&New Folder","file_new_folder","Create a new folder","Ctrl+Shift+N")
         self._add_action(file_menu,"&Save","file_save","Save the current file","Ctrl+S")
+        self._add_action(file_menu,"&Delete","file_delete","Delete the current file","Del")
         file_menu.addSeparator() # 添加一条分割线
         self._add_action(file_menu,"&Exit","file_exit","Exit the application","Ctrl+Q")
 
@@ -45,7 +46,6 @@ class MenuBar(QMenuBar):
 
         # 全屏&菜单栏&主侧边栏
         self._add_action(appearance_menu,"&Fullscreen","toggle_fullscreen","Toggle Fullscreen","F11")
-        self._add_action(appearance_menu,"&Menu Bar","toggle_menubar","Toggle Menu Bar visibility","Ctrl+M")
         self._add_action(appearance_menu,"&Primary Side Bar","toggle_sidebar","Toggle Primary Side Bar visibility","Ctrl+B",is_checkable=True,is_checked=True)
         appearance_menu.addSeparator() 
 
@@ -56,7 +56,7 @@ class MenuBar(QMenuBar):
         appearance_menu.addSeparator() 
 
         # 主题切换    
-        self._add_action(appearance_menu,"Dark &Theme","toggle_dark_theme","Toggle Dark Theme","",is_checkable=True)
+        self._add_action(appearance_menu,"Dark &Theme","toggle_dark_theme","Toggle Dark Theme","F12",is_checkable=True)
         
         view_menu.addMenu(appearance_menu)
         view_menu.addSeparator() 
@@ -85,9 +85,6 @@ class MenuBar(QMenuBar):
         go_menu.addSeparator()
 
         run_menu = self.addMenu("&Run")
-        # 1. 启动调试
-        self._add_action(run_menu,"Start &Debugging","start_debugging","Start Debugging","F5")
-        # 2. 以非调试模式运行
         self._add_action(run_menu,"Run Without &Debugging","run_without_debugging","Run Without Debugging","Ctrl+F5")
     
     def _add_action(self,menu:QMenu, text:str, action_name:str, status_tip:str="", shortcut:str="",is_checkable = False,is_checked = False):

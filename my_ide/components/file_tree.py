@@ -7,50 +7,39 @@ class FileTreeWidget(QWidget):
 
     new_file_clicked = Signal()
     new_folder_clicked = Signal()
+    delete_button_clicked = Signal()
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
     
     def init_ui(self):
-        # 创建主布局
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(0, 0, 0, 0)
         
-        #添加标题和按钮
+        # 标题和按钮
         top_bar_layout = QHBoxLayout()
         top_bar_layout.setContentsMargins(5, 5, 5, 5)
         top_bar_layout.setSpacing(5)
 
-        # 添加标题标签
+
         title_label = QLabel("文件树")
         title_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         top_bar_layout.addWidget(title_label)
 
-        # 【增加】核心：水平弹簧 (将右侧按钮推向最右边)
+        # 挤向右侧
         top_bar_layout.addStretch() 
-
-        # 【增加】新建文件按钮 (靠右，ICON + Tooltip) 
-        self.new_file_button = QPushButton()
-
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(os.path.dirname(current_dir))
-        
         file_icon_path = "./my_ide/resources/activity_bar/new_file.png"
         folder_icon_path = "./my_ide/resources/activity_bar/new_folder.png"
+        delete_icon_path = "./my_ide/resources/activity_bar/delete.png"
 
-        # print(f"文件图标路径: {file_icon_path}")
-        # print(f"文件图标存在: {os.path.exists(file_icon_path)}")
-        # print(f"文件夹图标路径: {folder_icon_path}")
-        # print(f"文件夹图标存在: {os.path.exists(folder_icon_path)}")
-
+        self.new_file_button = QPushButton()
         self.new_file_button.setIcon(QIcon(file_icon_path))
         self.new_file_button.setToolTip("新建文件")
         self.new_file_button.setFixedSize(24, 24)
         self.new_file_button.setStyleSheet("QPushButton { border: none; background: transparent; }")
         top_bar_layout.addWidget(self.new_file_button)
 
-        # 【增加】新建文件夹按钮 (靠右，ICON + Tooltip)
         self.new_folder_button = QPushButton()
         self.new_folder_button.setIcon(QIcon(folder_icon_path))
         self.new_folder_button.setToolTip("新建文件夹")
@@ -58,8 +47,16 @@ class FileTreeWidget(QWidget):
         self.new_folder_button.setStyleSheet("QPushButton { border: none; background: transparent; }")
         top_bar_layout.addWidget(self.new_folder_button)
 
+        self.delete_button = QPushButton()
+        self.delete_button.setIcon(QIcon(delete_icon_path))
+        self.delete_button.setToolTip("删除文件或文件夹")
+        self.delete_button.setFixedSize(24, 24)
+        self.delete_button.setStyleSheet("QPushButton { border: none; background: transparent; }")
+        top_bar_layout.addWidget(self.delete_button)
+
         self.new_file_button.clicked.connect(self.new_file_clicked.emit)
         self.new_folder_button.clicked.connect(self.new_folder_clicked.emit)
+        self.delete_button.clicked.connect(self.delete_button_clicked.emit)
 
         # 创建文件系统模型
         self.model = QFileSystemModel()
@@ -74,6 +71,10 @@ class FileTreeWidget(QWidget):
         # 创建树视图
         self.tree_view = QTreeView()
         self.tree_view.setModel(self.model)
+        self.tree_view.setExpandsOnDoubleClick(False)
+        self.tree_view.clicked.connect(self._on_item_clicked)
+        self.tree_view.setItemsExpandable(True)
+        self.tree_view.setAnimated(True)
         # 设置树视图属性
         self.tree_view.setHeaderHidden(True)  # 隐藏标题行
         # 只显示名称列，隐藏其他列（大小、类型、修改日期等）

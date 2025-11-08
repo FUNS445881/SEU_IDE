@@ -1,1 +1,3 @@
-PySide6
+PySide6 # qt库
+qdarkstyle # 深色主题
+Pygments # 语法高亮库

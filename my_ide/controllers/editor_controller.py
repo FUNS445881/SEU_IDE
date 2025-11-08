@@ -10,7 +10,7 @@ class EditorController:
         self.last_search_flags = QTextDocument.FindFlags(0)
         self.last_search_results = []
         self.current_search_index = -1
-
+        self.original_font = self.editor.font()
 
     def undo(self):
         """撤销上一步操作"""
@@ -38,7 +38,7 @@ class EditorController:
 
     def zoom_reset(self):
         """重置编辑器缩放比例"""
-        
+        self.editor.setFont(self.original_font)
 
     def zoom_in(self):
         """放大编辑器内容"""
