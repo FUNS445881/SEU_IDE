@@ -1,7 +1,6 @@
 import sys
 import os
 from PySide6.QtWidgets import QApplication,QMainWindow,QPlainTextEdit,QFileDialog, QDockWidget, QHBoxLayout, QStackedWidget,QWidget
-from PySide6.QtGui import QAction,QTextCursor
 from PySide6.QtCore import Qt
 from ..components.file_tree import FileTreeWidget
 from ..components.activity_bar import ActivityBar
@@ -49,6 +48,7 @@ class MainWindow(QMainWindow):
         """
         self.custom_menu_bar = MenuBar(self)
         self.setMenuBar(self.custom_menu_bar)
+        self.custom_menu_bar.action_triggered.connect(self._handle_menu_action)
         
     
     def _init_sidebar(self):
@@ -86,11 +86,75 @@ class MainWindow(QMainWindow):
         # file_tree初始化
         self.file_tree_view.set_root_path(current_dir)
         self.file_tree_view.tree_view.doubleClicked.connect(self._on_file_double_clicked)
+        self.file_tree_view.new_file_clicked.connect(self._on_new_file)
+        self.file_tree_view.new_folder_clicked.connect(self._on_new_folder)
 
         # search_panel初始化
         self.search_panel_view.result_clicked.connect(self._on_search_result_clicked)
         self.search_panel_view.error_found.connect(self._on_search_error_found)
         self.search_panel_view.search_completed.connect(self._on_search_completed)
+
+    def _on_new_file(self):
+        """处理文件树中新建文件按钮点击的槽函数"""
+        # 1. 确定要在哪个目录下新建
+        selected_path = self.file_tree_view.get_selected_file_path()
+        if not selected_path or os.path.isfile(selected_path):
+            # 如果没选中任何东西，或选中了一个文件，则使用根路径
+            current_dir = self.file_tree_view.model.filePath(self.file_tree_view.tree_view.rootIndex())
+        else:
+            # 如果选中了一个文件夹，则使用这个文件夹
+            current_dir = selected_path
+
+        # 2. 弹出输入框获取新文件名
+        file_name, ok = QInputDialog.getText(self, "新建文件", "输入文件名:", QLineEdit.Normal, "untitled.txt")
+        
+        if ok and file_name:
+            new_file_path = os.path.join(current_dir, file_name)
+            try:
+                # 3. 创建空文件
+                with open(new_file_path, 'w', encoding='utf-8') as f:
+                    f.write("")
+                
+                self.statusBar().showMessage(f"已创建文件: {file_name}", 3000)
+                # 4. 刷新文件树视图 (QFileSystemModel 会自动刷新，但最好确保)
+                self.file_tree_view.model.refresh(self.file_tree_view.model.index(current_dir))
+                # 可选：展开到新建文件的父目录
+                self.file_tree_view.expand_to_path(current_dir) 
+                
+            except Exception as e:
+                self.statusBar().showMessage(f"创建文件失败: {str(e)}", 3000)
+                print(f"Error creating file: {e}")
+
+
+    def _on_new_folder(self):
+        """处理文件树中新建文件夹按钮点击的槽函数"""
+        # 1. 确定要在哪个目录下新建
+        selected_path = self.file_tree_view.get_selected_file_path()
+        if not selected_path or os.path.isfile(selected_path):
+            # 如果没选中任何东西，或选中了一个文件，则使用根路径
+            current_dir = self.file_tree_view.model.filePath(self.file_tree_view.tree_view.rootIndex())
+        else:
+            # 如果选中了一个文件夹，则使用这个文件夹
+            current_dir = selected_path
+
+        # 2. 弹出输入框获取新文件夹名
+        folder_name, ok = QInputDialog.getText(self, "新建文件夹", "输入文件夹名:", QLineEdit.Normal, "New Folder")
+        
+        if ok and folder_name:
+            new_folder_path = os.path.join(current_dir, folder_name)
+            try:
+                # 3. 创建文件夹 (支持多级创建)
+                os.makedirs(new_folder_path, exist_ok=True)
+                
+                self.statusBar().showMessage(f"已创建文件夹: {folder_name}", 3000)
+                # 4. 刷新文件树视图
+                self.file_tree_view.model.refresh(self.file_tree_view.model.index(current_dir))
+                # 可选：展开到新建文件夹
+                self.file_tree_view.expand_to_path(new_folder_path) 
+                
+            except Exception as e:
+                self.statusBar().showMessage(f"创建文件夹失败: {str(e)}", 3000)
+                print(f"Error creating folder: {e}")
 
     def switch_sidebar_view(self, view_id):
         if view_id in self.views:
@@ -207,6 +271,9 @@ class MainWindow(QMainWindow):
         """
         self.statusBar().showMessage(f"搜索完成: {total_files} 个文件，找到 {total_matches} 个匹配项", 5000)
 
+    def _handle_menu_action(self, action: str):
+        print(f"菜单动作: {action}")
+        pass
 
     def _on_edit_undo(self):
         """处理编辑撤销动作的槽函数"""
@@ -244,7 +311,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("已执行: 全选", 1500)
         print("Console: 已执行全选操作")
 
-    def _on_repeat_selection(self):
+    def _on_select_repeat(self):
         """处理选择重复选择动作的槽函数"""
         self.statusBar().showMessage("功能待实现: 重复选择", 1500)
         print("Console: 正在执行重复选择操作...")
@@ -304,12 +371,12 @@ class MainWindow(QMainWindow):
     def _on_toggle_word_wrap(self):
         """处理查看自动换行动作的槽函数"""
         current_mode = self.editor.wordWrapMode()
-        if current_mode == QPlainTextEdit.WidgetWidth:
-            self.editor.setWordWrapMode(QPlainTextEdit.NoWrap)
+        if current_mode == QTextOption.WrapAtWordBoundaryOrAnywhere:
+            self.editor.setWordWrapMode(QTextOption.NoWrap)
             self.statusBar().showMessage("已关闭自动换行", 1500)
             print("Console: 自动换行已关闭")
         else:
-            self.editor.setWordWrapMode(QPlainTextEdit.WidgetWidth)
+            self.editor.setWordWrapMode(QTextOption.WrapAtWordBoundaryOrAnywhere)
             self.statusBar().showMessage("已开启自动换行", 1500)
             print("Console: 自动换行已开启")
 
