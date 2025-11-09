@@ -1,10 +1,11 @@
 import sys
 import os
+import subprocess
 import qdarkstyle
 from PySide6.QtWidgets import (QApplication,QMainWindow,QPlainTextEdit,QFileDialog, QDockWidget, 
                                 QHBoxLayout, QStackedWidget, QWidget,QDialog,QInputDialog,QLineEdit)
 from PySide6.QtGui import QAction,QTextCursor,QTextOption,QResizeEvent
-from PySide6.QtCore import Qt,QEvent,QTimer
+from PySide6.QtCore import Qt,QEvent,QTimer, QThread, QObject, Signal
 from my_ide.components.file_tree import FileTreeWidget
 from my_ide.components.activity_bar import ActivityBar
 from my_ide.components.menu_bar import MenuBar
@@ -13,10 +14,54 @@ from my_ide.components.find_panel import FindPanel
 from my_ide.components.output_bar import OutputBar
 from my_ide.controllers.editor_controller import EditorController
 
+# 用于在后台线程中运行子进程，避免UI冻结
+class ProcessWorker(QObject):
+    new_output = Signal(str)
+    finished = Signal(int)
+
+    def __init__(self, command, parent=None):
+        super().__init__(parent)
+        self.command = command
+
+    def run(self):
+        """执行命令并实时发送输出"""
+        try:
+            # 在Windows上使用 CREATE_NO_WINDOW 防止弹出控制台窗口
+            creationflags = 0
+            if sys.platform == "win32":
+                creationflags = subprocess.CREATE_NO_WINDOW
+
+            # shell=True 允许我们运行更复杂的命令，但要注意安全风险
+            process = subprocess.Popen(
+                self.command,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                creationflags=creationflags
+            )
+
+            # 实时读取输出
+            for line in iter(process.stdout.readline, ''):
+                self.new_output.emit(line.strip())
+            
+            process.stdout.close()
+            return_code = process.wait()
+            self.finished.emit(return_code)
+
+        except Exception as e:
+            self.new_output.emit(f"执行时发生错误: {e}")
+            self.finished.emit(-1)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.current_file_path = None  # 跟踪当前打开的文件路径
+        self.run_thread = None # 用于跟踪运行命令的线程
+        self.run_worker = None # 用于跟踪运行命令的worker
         self.init_ui()
         self._init_find_panel()
         self._init_output_bar()
@@ -138,6 +183,8 @@ class MainWindow(QMainWindow):
             "toggle_sidebar": self._on_toggle_sidebar,
             "toggle_output": self._on_toggle_output,
             "toggle_dark_theme": self._on_toggle_dark_theme,
+            "run_with_terminal": self._on_run_with_terminal,
+            "run_without_terminal": self._on_run_without_terminal,
         }
 
     def _init_find_panel(self):
@@ -514,12 +561,70 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("未找到匹配项，未进行替换", 3000)
             print("Console: 未找到匹配项，未进行替换")
 
+    def _on_run_with_terminal(self):
+        """通过向内置终端发送命令来运行"""
+        command, ok = QInputDialog.getText(self, "在终端中运行", "输入命令:", QLineEdit.Normal)
+        
+        if ok and command:
+            # 确保输出面板和终端是可见的
+            self.output_dock.show()
+            self.output_bar.tabs.setCurrentWidget(self.output_bar.terminal_widget)
+            
+            # termqt 需要 bytes 并以 \r 结尾来模拟回车
+            command_bytes = (command + '\r').encode('utf-8')
+            self.output_bar.terminal_io.write(command_bytes)
+            self.statusBar().showMessage(f"命令 '{command}' 已发送到终端", 3000)
     
-    def _on_run_without_debugging(self):
-        """处理运行以非调试模式运行动作的槽函数"""
-        # 等待小组编译器
-        self.statusBar().showMessage("正在运行...", 3000)
-        print("Console: 正在以非调试模式运行")
+    def _on_run_without_terminal(self):
+        """使用subprocess在后台运行命令，并将输出重定向到输出面板"""
+        if self.run_thread and self.run_thread.isRunning():
+            self.statusBar().showMessage("已有命令正在运行，请稍后...", 3000)
+            return
+
+        command, ok = QInputDialog.getText(self, "运行命令", "输入命令:", QLineEdit.Normal)
+
+        if ok and command:
+            # 准备UI
+            self.output_dock.show()
+            self.output_bar.tabs.setCurrentWidget(self.output_bar.output_panel)
+            self.output_bar.clear_output()
+            self.output_bar.append_output(f"> {command}\n" + "="*20)
+
+            # 创建并配置线程和worker
+            self.run_thread = QThread()
+            self.run_worker = ProcessWorker(command)
+            self.run_worker.moveToThread(self.run_thread)
+
+            # 连接信号和槽
+            self.run_thread.started.connect(self.run_worker.run)
+            self.run_worker.new_output.connect(self.output_bar.append_output)
+
+            # 3. Worker 任务完成时，打印最终信息，并请求线程退出
+            self.run_worker.finished.connect(self._on_process_finished)
+            self.run_worker.finished.connect(self.run_thread.quit)
+            
+            # 4. 确保在任务完成后，worker 和 thread 对象最终会被Qt安全删除
+            self.run_worker.finished.connect(self.run_worker.deleteLater)
+            self.run_thread.finished.connect(self.run_thread.deleteLater)
+
+            # 5. 当线程真正结束后，再执行最终的清理工作,防止闪退
+            self.run_thread.finished.connect(self._on_thread_finished)
+
+            # 启动线程
+            self.run_thread.start()
+            self.statusBar().showMessage(f"正在执行: {command}", 3000)
+
+    def _on_process_finished(self, return_code):
+        """当后台进程结束后调用的槽函数"""
+        self.output_bar.append_output("="*20 + f"\n进程已结束，退出代码: {return_code}")
+
+    def _on_thread_finished(self):
+        """当后台线程结束后调用的槽函数"""
+        self.statusBar().showMessage("命令执行完毕", 3000)
+        # 此时线程已安全停止，可以安全地移除对它们的引用了
+        self.run_thread = None
+        self.run_worker = None
+        print("Console: Run thread and worker have been cleaned up.")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

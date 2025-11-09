@@ -85,7 +85,8 @@ class MenuBar(QMenuBar):
         # go_menu.addSeparator()
 
         run_menu = self.addMenu("&Run")
-        self._add_action(run_menu,"Run Without &Debugging","run_without_debugging","Run Without Debugging","Ctrl+F5")
+        self._add_action(run_menu,"Run Without Terminal","run_without_terminal","Run Without Terminal, Only Output","Ctrl+F5")
+        self._add_action(run_menu, "Run With Terminal","run_with_terminal","Run With Terminal, Only Terminal","Ctrl+F6")
     
     def _add_action(self,menu:QMenu, text:str, action_name:str, status_tip:str="", shortcut:str="",is_checkable = False,is_checked = False):
         """辅助方法：创建并添加动作到指定菜单"""

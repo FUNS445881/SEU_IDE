@@ -7,9 +7,12 @@ import sys
 import logging
 
 class OutputBar(QWidget):
+    terminal = None
+    terminal_io = None
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
+
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -29,13 +32,14 @@ class OutputBar(QWidget):
         logger.addHandler(handler)
         self.terminal_widget = QWidget()
         terminal_layout = QHBoxLayout()
-        terminal = Terminal(400, 300, logger=logger)
-        terminal.set_font()
-        terminal.maximum_line_history = 2000
-        scroll = QScrollBar(Qt.Vertical, terminal)
-        terminal.connect_scroll_bar(scroll)
+        self.terminal = Terminal(400, 300, logger=logger)
+        self.terminal.set_font()
+        self.terminal.maximum_line_history = 2000
+        scroll = QScrollBar(Qt.Vertical, self.terminal)
+        self.terminal.connect_scroll_bar(scroll)
+        print(self.terminal)
 
-        terminal_layout.addWidget(terminal)
+        terminal_layout.addWidget(self.terminal)
         terminal_layout.addWidget(scroll)
         terminal_layout.setSpacing(0)
         
@@ -43,19 +47,20 @@ class OutputBar(QWidget):
         bin = "cmd"
 
         from termqt import TerminalWinptyIO
-        terminal_io = TerminalWinptyIO(
-                terminal.row_len,
-                terminal.col_len,
+        self.terminal_io = TerminalWinptyIO(
+                self.terminal.row_len,
+                self.terminal.col_len,
                 bin,
                 logger=logger
                 )
 
-        terminal.enable_auto_wrap(auto_wrap_enabled)
-        terminal_io.stdout_callback = terminal.stdout
-        terminal.stdin_callback = terminal_io.write
-        terminal.resize_callback = terminal_io.resize
-        terminal_io.spawn()
+        self.terminal.enable_auto_wrap(auto_wrap_enabled)
+        self.terminal_io.stdout_callback = self.terminal.stdout
+        self.terminal.stdin_callback = self.terminal_io.write
+        self.terminal.resize_callback = self.terminal_io.resize
+        self.terminal_io.spawn()
         self.terminal_widget.setLayout(terminal_layout)
+
         # 问题面板
         self.problems_panel = QTableWidget()
         self.problems_panel.setColumnCount(4)
@@ -88,3 +93,9 @@ class OutputBar(QWidget):
     def clear_all(self):
         self.problems_panel.setRowCount(0)
         self.output_panel.clear()
+    
+    def clear_output(self):
+        self.output_panel.clear()
+
+    def run_with_terminal(self):
+        self.terminal_io.write(b"echo Hello from terminal!\r\n")
