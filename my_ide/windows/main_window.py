@@ -3,12 +3,13 @@ import os
 import qdarkstyle
 from PySide6.QtWidgets import (QApplication,QMainWindow,QPlainTextEdit,QFileDialog, QDockWidget, 
                                 QHBoxLayout, QStackedWidget, QWidget,QDialog,QInputDialog,QLineEdit)
-from PySide6.QtGui import QAction,QTextCursor,QTextOption
-from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction,QTextCursor,QTextOption,QResizeEvent
+from PySide6.QtCore import Qt,QEvent,QTimer
 from my_ide.components.file_tree import FileTreeWidget
 from my_ide.components.activity_bar import ActivityBar
 from my_ide.components.menu_bar import MenuBar
 from my_ide.components.search_panel import SearchPanel
+from my_ide.components.find_panel import FindPanel
 from my_ide.controllers.editor_controller import EditorController
 
 class MainWindow(QMainWindow):
@@ -18,7 +19,9 @@ class MainWindow(QMainWindow):
         
         self.init_ui()
         self._init_controller()
-
+        self._init_find_panel()
+        # 安装事件过滤器
+        QApplication.instance().installEventFilter(self)
         self.default_palette = QApplication.instance().palette()
         self.is_dark_theme = False
 
@@ -133,6 +136,44 @@ class MainWindow(QMainWindow):
             "toggle_dark_theme": self._on_toggle_dark_theme,
         }
 
+    def _init_find_panel(self):
+        """初始化查找面板"""
+        self.find_panel = FindPanel(self.editor) # 以editor为父组件，方便定位
+        self.find_panel.hide()
+
+        # 连接信号
+        self.find_panel.find_triggered.connect(self._on_find_triggered)
+        self.find_panel.find_next_triggered.connect(self._on_find_next)
+        self.find_panel.find_previous_triggered.connect(self._on_find_previous)
+        self.find_panel.closed.connect(self._on_find_panel_closed)
+
+    def _position_find_panel(self):
+        """将查找面板定位在编辑器的右上角"""
+        if self.find_panel.isVisible():
+            margin = 10
+            panel_size = self.find_panel.sizeHint()
+            x = self.editor.width() - panel_size.width() - margin
+            y = margin
+            self.find_panel.move(x, y)
+
+    # 该代码是为了修复在搜索功能启用时按下enter键，同时触发下一个搜索和文本编辑器换行的问题
+    def eventFilter(self, watched, event):
+        if hasattr(self, 'find_panel') and self.find_panel.isVisible():
+            if event.type() == QEvent.KeyPress:
+                if event.key() in [Qt.Key_Enter, Qt.Key_Return]:
+                    if watched is self.find_panel.search_input:
+                        # 手动模拟按钮点击，确保功能被执行
+                        self.find_panel.next_button.click()
+                        # 返回 True，消费事件，阻止其原生处理（发射信号）和冒泡，这样就不会继续传递给QPlainTextEdit
+                        return True
+        
+        return super().eventFilter(watched, event)
+
+    # 确保在窗口关闭时移除过滤器，避免内存泄漏
+    def closeEvent(self, event):
+        QApplication.instance().removeEventFilter(self)
+        super().closeEvent(event)
+
     def _on_new_file(self):
         """处理文件树中新建文件按钮点击的槽函数"""
         # 1. 确定要在哪个目录下新建
@@ -242,9 +283,14 @@ class MainWindow(QMainWindow):
         try:
             with open(file_path, 'r', encoding='utf-8') as file:
                 content = file.read()
+                self.editor_controller._clear_search()
                 self.editor.setPlainText(content)
                 self.current_file_path = file_path
                 self.statusBar().showMessage(f"已打开文件: {file_path}", 3000)
+                if self.find_panel.isVisible():
+                    # 延迟执行搜索，确保文本已加载
+                    QTimer.singleShot(0, self.find_panel._on_search)
+
         except Exception as e:
             self.statusBar().showMessage(f"打开文件失败: {str(e)}", 3000)
             print(f"Error opening file: {e}")
@@ -389,49 +435,42 @@ class MainWindow(QMainWindow):
         print(f"Console: 侧边栏可见性切换为 {not is_visible}")
 
     def _show_find_dialog(self):
-        """显示查找对话框"""
-        pass
+        """显示查找面板"""
+        self._position_find_panel()
+        self.find_panel.show()
+        self.find_panel.raise_()
+        self._position_find_panel()
+        self.find_panel.search_input.setFocus()
+        self.find_panel.search_input.selectAll()
+        self.find_panel._on_search()  # 自动执行一次搜索
+
+    def _on_find_triggered(self, term, case_sensitive, whole_word):
+        """处理查找请求"""
+        current, total = self.editor_controller.edit_find(term, case_sensitive, whole_word)
+        self.find_panel.update_results_label(current, total)
+        if total == 0 and term:
+            self.statusBar().showMessage("未找到匹配项", 1500)
+        
+    def _on_find_next(self):
+        """处理查找下一个"""
+        current, total = self.editor_controller.find_next()
+        self.find_panel.update_results_label(current, total)
+
+    def _on_find_previous(self):
+        """处理查找上一个"""
+        current, total = self.editor_controller.find_previous()
+        self.find_panel.update_results_label(current, total)
+
+    def _on_find_panel_closed(self):
+        """当查找面板关闭时，清除搜索状态和高亮"""
+        self.editor_controller._clear_search()
+        self.editor.setFocus() # 将焦点还给编辑器
 
     def _on_toggle_output(self):
         """处理查看输出动作的槽函数"""
         self.statusBar().showMessage("功能待实现: 切换输出面板", 1500)
         print("Console: 尝试切换输出面板可见性")
         
-    def _on_go_back(self):
-        """处理转到里返回动作的槽函数"""
-        self.statusBar().showMessage("功能待实现: 返回上一个位置", 1500)
-        print("Console: 正在执行返回操作...")
-        
-    def _on_go_forward(self):
-        """处理转到里前进动作的槽函数"""
-        self.statusBar().showMessage("功能待实现: 前进到下一个位置", 1500)
-        print("Console: 正在执行前进操作...")
-        
-    def _on_go_to_type_definition(self):
-        """处理转到类型定义动作的槽函数"""
-        self.statusBar().showMessage("功能待实现: 转到类型定义", 1500)
-        print("Console: 正在执行转到类型定义操作...")
-        
-    def _on_go_to_bracket(self):
-        """处理转到括号动作的槽函数"""
-        self.statusBar().showMessage("功能待实现: 转到匹配的括号", 1500)
-        print("Console: 正在执行转到括号操作...")
-        
-    def _on_prev_problem(self):
-        """处理转到上一个问题动作的槽函数"""
-        self.statusBar().showMessage("功能待实现: 上一个问题", 1500)
-        print("Console: 正在执行上一个问题操作...")
-        
-    def _on_next_problem(self):
-        """处理转到下一个问题动作的槽函数"""
-        self.statusBar().showMessage("功能待实现: 下一个问题", 1500)
-        print("Console: 正在执行下一个问题操作...")
-
-    def _on_start_debugging(self):
-        """处理运行启动调试动作的槽函数"""
-        self.statusBar().showMessage("正在调试...", 3000)
-        print("Console: 正在启动调试")
-
     def _on_run_without_debugging(self):
         """处理运行以非调试模式运行动作的槽函数"""
         self.statusBar().showMessage("正在运行...", 3000)
