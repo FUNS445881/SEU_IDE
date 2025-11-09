@@ -13,7 +13,10 @@ class EditorController:
         self.current_search_index = -1
         self.original_font = self.editor.font()
 
-        # 高亮格式
+        # 高亮语法
+        self.highlighter = None
+
+        # 搜索高亮格式
         self.match_format = QTextCharFormat()
         self.match_format.setBackground(QColor("yellow").darker(120))
         self.current_match_format = QTextCharFormat()

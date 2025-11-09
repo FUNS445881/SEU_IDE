@@ -1,7 +1,9 @@
 import sys
 import os
 import subprocess
+
 import qdarkstyle
+
 from PySide6.QtWidgets import (QApplication,QMainWindow,QPlainTextEdit,QFileDialog, QDockWidget, 
                                 QHBoxLayout, QStackedWidget, QWidget,QDialog,QInputDialog,QLineEdit)
 from PySide6.QtGui import QAction,QTextCursor,QTextOption,QResizeEvent
@@ -13,6 +15,9 @@ from my_ide.components.search_panel import SearchPanel
 from my_ide.components.find_panel import FindPanel
 from my_ide.components.output_bar import OutputBar
 from my_ide.controllers.editor_controller import EditorController
+from pygments import lexers
+from pygments.util import ClassNotFound
+from my_ide.components.syntax_highlighter import PygmentsHighlighter
 
 # 用于在后台线程中运行子进程，避免UI冻结
 class ProcessWorker(QObject):
@@ -91,6 +96,11 @@ class MainWindow(QMainWindow):
         """
         self.editor = QPlainTextEdit(self)
         self.setCentralWidget(self.editor)
+        font = self.editor.font()
+        font_metrics = self.editor.fontMetrics()
+        # tab四个空格
+        tab_stop_width = font_metrics.horizontalAdvance(' ' * 4)
+        self.editor.setTabStopDistance(tab_stop_width)
 
     def _init_status_bar(self):
         """
@@ -365,6 +375,7 @@ class MainWindow(QMainWindow):
                 if self.find_panel.isVisible():
                     # 延迟执行搜索，确保文本已加载
                     QTimer.singleShot(0, self.find_panel._on_search)
+                self._apply_syntax_highlighting(file_path)
 
         except Exception as e:
             self.statusBar().showMessage(f"打开文件失败: {str(e)}", 3000)
@@ -382,6 +393,7 @@ class MainWindow(QMainWindow):
             self.views["resource_manager"].set_root_path(folder_path)
             self.views["search_panel"].set_search_root(folder_path)
             self.editor.clear()
+            self._apply_syntax_highlighting(None) # 清除高亮
             self.current_file_path = None
             self.statusBar().showMessage(f"已打开文件夹: {folder_path}", 3000)
 
@@ -575,6 +587,28 @@ class MainWindow(QMainWindow):
             self.output_bar.terminal_io.write(command_bytes)
             self.statusBar().showMessage(f"命令 '{command}' 已发送到终端", 3000)
     
+    def _apply_syntax_highlighting(self, file_path):
+        """根据文件路径应用或移除高亮"""
+        lexer = None
+        try:
+            # 使用 Pygments 的内置功能，根据文件名自动猜测 Lexer
+            lexer = lexers.get_lexer_for_filename(file_path, stripall=True)
+            print(f"Console: Found lexer for {os.path.basename(file_path)}: {lexer.name}")
+        except ClassNotFound:
+            # 如果 Pygments 猜不到（例如，对于 .txt 文件），则不进行高亮
+            print(f"Console: No lexer found for {os.path.basename(file_path)}.")
+            pass # lexer 保持为 None
+        
+        # 清理旧的高亮
+        if self.editor_controller.highlighter:
+            self.editor_controller.highlighter.setDocument(None)
+            self.editor_controller.highlighter = None
+        if lexer:
+            self.editor_controller.highlighter = PygmentsHighlighter(
+                self.editor.document(), lexer
+            )
+
+
     def _on_run_without_terminal(self):
         """使用subprocess在后台运行命令，并将输出重定向到输出面板"""
         if self.run_thread and self.run_thread.isRunning():
