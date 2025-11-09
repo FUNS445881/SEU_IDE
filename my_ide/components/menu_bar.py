@@ -62,7 +62,8 @@ class MenuBar(QMenuBar):
         view_menu.addSeparator() 
 
         # 3. 输出 (Output)
-        self._add_action(view_menu,"&Output","toggle_output","Toggle Output Panel visibility","Ctrl+Shift+U",is_checkable=True)
+        self._add_action(view_menu,"&Output","toggle_output","Toggle Output Panel visibility","Ctrl+Shift+U")
+        
         # 4. 自动换行 (Word Wrap)
         self._add_action(view_menu,"Word &Wrap","toggle_word_wrap","Toggle Word Wrap","Alt+Z",is_checkable=True)
 

@@ -1,3 +1,4 @@
 PySide6 # qt库
 qdarkstyle # 深色主题
 Pygments # 语法高亮库
+termqt # 终端组件，必须widget,请参考test里面的terminal_test使用

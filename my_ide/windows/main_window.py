@@ -10,17 +10,17 @@ from my_ide.components.activity_bar import ActivityBar
 from my_ide.components.menu_bar import MenuBar
 from my_ide.components.search_panel import SearchPanel
 from my_ide.components.find_panel import FindPanel
+from my_ide.components.output_bar import OutputBar
 from my_ide.controllers.editor_controller import EditorController
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.current_file_path = None  # 跟踪当前打开的文件路径
-        
         self.init_ui()
         self._init_find_panel()
+        self._init_output_bar()
         self._init_controller()
-
         # 安装事件过滤器
         QApplication.instance().installEventFilter(self)
         self.default_palette = QApplication.instance().palette()
@@ -135,7 +135,9 @@ class MainWindow(QMainWindow):
             "toggle_word_wrap": self.editor_controller.toggle_word_wrap,
             "toggle_fullscreen": self._on_toggle_fullscreen,
             "toggle_sidebar": self._on_toggle_sidebar,
+            "toggle_output": self._on_toggle_output,
             "toggle_dark_theme": self._on_toggle_dark_theme,
+            "toggle_select_all_matches": self.editor_controller.select_all_matches
         }
 
     def _init_find_panel(self):
@@ -149,6 +151,26 @@ class MainWindow(QMainWindow):
         self.find_panel.find_previous_triggered.connect(self._on_find_previous)
         self.find_panel.closed.connect(self._on_find_panel_closed)
         self.find_panel.replace_all_triggered.connect(self._on_replace_all)
+
+    def _init_output_bar(self):
+        """初始化底部的输出面板"""
+        # 创建 OutputBar 实例
+        self.output_bar = OutputBar(self)
+        
+        # 将其放入一个 QDockWidget 中，以便可以停靠和浮动
+        self.output_dock = QDockWidget("面板", self)
+        self.output_dock.setWidget(self.output_bar)
+        
+        # 将这个 dock widget 添加到主窗口的底部
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.output_dock)
+        
+        #添加一些示例内容，以便运行后能看到效果
+        self.output_bar.append_output("IDE 启动成功。")
+        self.output_bar.add_problem("变量 'x' 未被使用", "main.py", 15, "警告")
+        self.output_bar.add_problem("缺少分号", "style.css", 22, "错误")
+
+        # 隐藏
+        self.output_dock.hide()
 
     def _position_find_panel(self):
         """将查找面板定位在编辑器的右上角"""
@@ -440,6 +462,12 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"侧边栏 {'已隐藏' if is_visible else '已显示'}", 1500)
         print(f"Console: 侧边栏可见性切换为 {not is_visible}")
 
+    def _on_toggle_output(self):
+        """处理查看输出动作的槽函数，切换输出面板的可见性"""
+        is_visible = self.output_dock.isVisible()
+        self.output_dock.setVisible(not is_visible)
+        self.statusBar().showMessage(f"输出面板 {'已隐藏' if is_visible else '已显示'}", 1500)
+
     def _show_find_dialog(self):
         """显示查找面板"""
         self._position_find_panel()
@@ -483,13 +511,10 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("未找到匹配项，未进行替换", 3000)
             print("Console: 未找到匹配项，未进行替换")
 
-    def _on_toggle_output(self):
-        """处理查看输出动作的槽函数"""
-        self.statusBar().showMessage("功能待实现: 切换输出面板", 1500)
-        print("Console: 尝试切换输出面板可见性")
-        
+    
     def _on_run_without_debugging(self):
         """处理运行以非调试模式运行动作的槽函数"""
+        # 等待小组编译器
         self.statusBar().showMessage("正在运行...", 3000)
         print("Console: 正在以非调试模式运行")
 
