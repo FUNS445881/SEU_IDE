@@ -4,7 +4,7 @@ import subprocess
 
 import qdarkstyle
 
-from PySide6.QtWidgets import (QApplication,QMainWindow,QPlainTextEdit,QFileDialog, QDockWidget, 
+from PySide6.QtWidgets import (QApplication,QMainWindow,QFileDialog, QDockWidget, 
                                 QHBoxLayout, QStackedWidget, QWidget,QDialog,QInputDialog,QLineEdit)
 from PySide6.QtGui import QAction,QTextCursor,QTextOption,QResizeEvent,QColor,QPalette
 from PySide6.QtCore import Qt,QEvent,QTimer, QThread, QObject, Signal
@@ -15,6 +15,7 @@ from my_ide.components.search_panel import SearchPanel
 from my_ide.components.find_panel import FindPanel
 from my_ide.components.output_bar import OutputBar
 from my_ide.controllers.editor_controller import EditorController
+from my_ide.components.code_editor import CodeEditor
 from pygments import lexers
 from pygments.util import ClassNotFound
 from my_ide.components.syntax_highlighter_customer import CustomHighlighter
@@ -99,7 +100,7 @@ class MainWindow(QMainWindow):
         """
         初始化代码编辑器
         """
-        self.editor = QPlainTextEdit(self)
+        self.editor = CodeEditor(self)
         self.setCentralWidget(self.editor)
         font = self.editor.font()
         font_metrics = self.editor.fontMetrics()
