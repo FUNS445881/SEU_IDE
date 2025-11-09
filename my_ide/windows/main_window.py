@@ -6,7 +6,7 @@ import qdarkstyle
 
 from PySide6.QtWidgets import (QApplication,QMainWindow,QPlainTextEdit,QFileDialog, QDockWidget, 
                                 QHBoxLayout, QStackedWidget, QWidget,QDialog,QInputDialog,QLineEdit)
-from PySide6.QtGui import QAction,QTextCursor,QTextOption,QResizeEvent
+from PySide6.QtGui import QAction,QTextCursor,QTextOption,QResizeEvent,QColor,QPalette
 from PySide6.QtCore import Qt,QEvent,QTimer, QThread, QObject, Signal
 from my_ide.components.file_tree import FileTreeWidget
 from my_ide.components.activity_bar import ActivityBar
@@ -17,7 +17,8 @@ from my_ide.components.output_bar import OutputBar
 from my_ide.controllers.editor_controller import EditorController
 from pygments import lexers
 from pygments.util import ClassNotFound
-from my_ide.components.syntax_highlighter import PygmentsHighlighter
+from my_ide.components.syntax_highlighter_customer import CustomHighlighter
+from my_ide.config.settings import DEFAULT_BACKGROUND_COLOR,DEFAULT_TEXT_COLOR
 
 # 用于在后台线程中运行子进程，避免UI冻结
 class ProcessWorker(QObject):
@@ -75,6 +76,10 @@ class MainWindow(QMainWindow):
         QApplication.instance().installEventFilter(self)
         self.default_palette = QApplication.instance().palette()
         self.is_dark_theme = False
+        self.light_style_name = 'default'  # 默认的浅色语法风格
+        self.dark_style_name = 'monokai'    # 默认的深色语法风格
+
+        self.current_style_name = 'default'
 
     def init_ui(self):
         """
@@ -116,6 +121,7 @@ class MainWindow(QMainWindow):
         self.custom_menu_bar = MenuBar(self)
         self.setMenuBar(self.custom_menu_bar)
         self.custom_menu_bar.action_triggered.connect(self._handle_menu_action)
+        self.custom_menu_bar.style_changed.connect(self._on_style_changed)
         
     def _init_sidebar(self):
         current_dir = os.getcwd()
@@ -492,11 +498,16 @@ class MainWindow(QMainWindow):
             QApplication.instance().setStyleSheet(qdarkstyle.load_stylesheet())
             self.statusBar().showMessage("已切换到深色主题", 1500)
             print("Console: 已切换到深色主题")
+            self.current_style_name = self.dark_style_name
         else:
             QApplication.instance().setStyleSheet("")
             QApplication.instance().setPalette(self.default_palette)
             self.statusBar().showMessage("已切换到浅色主题", 1500)
             print("Console: 已切换到浅色主题")
+            self.current_style_name = self.light_style_name
+        self.custom_menu_bar.update_style_selection(self.current_style_name)
+        if self.current_file_path:
+            self._apply_syntax_highlighting(self.current_file_path)
 
     def _on_select_all_matches(self):
         """处理选择所有匹配项动作的槽函数"""
@@ -591,23 +602,56 @@ class MainWindow(QMainWindow):
         """根据文件路径应用或移除高亮"""
         lexer = None
         try:
-            # 使用 Pygments 的内置功能，根据文件名自动猜测 Lexer
+            # 更具后缀判断lexer
             lexer = lexers.get_lexer_for_filename(file_path, stripall=True)
             print(f"Console: Found lexer for {os.path.basename(file_path)}: {lexer.name}")
         except ClassNotFound:
-            # 如果 Pygments 猜不到（例如，对于 .txt 文件），则不进行高亮
+            # 不进行高亮
             print(f"Console: No lexer found for {os.path.basename(file_path)}.")
-            pass # lexer 保持为 None
+            pass
         
         # 清理旧的高亮
         if self.editor_controller.highlighter:
             self.editor_controller.highlighter.setDocument(None)
             self.editor_controller.highlighter = None
+        highlighter = None
         if lexer:
-            self.editor_controller.highlighter = PygmentsHighlighter(
-                self.editor.document(), lexer
+            self.editor_controller.highlighter = CustomHighlighter(
+                self.editor.document(), 
+                lexer,
+                self.current_style_name
             )
+            self.editor_controller.highlighter = highlighter
+        
+        palette = self.editor.palette()
+        if highlighter:
+            palette.setColor(QPalette.Base, highlighter.background_color)
+            palette.setColor(QPalette.Text, highlighter.text_color)
+        else:
+            # 如果没有高亮器，根据主题名称猜测一个合理的背景
+            if self.current_style_name.lower() == 'default':
+                 palette.setColor(QPalette.Base, QColor(DEFAULT_BACKGROUND_COLOR))
+                 palette.setColor(QPalette.Text, QColor(DEFAULT_TEXT_COLOR))
+            elif 'dark' in self.current_style_name or 'monokai' in self.current_style_name:
+                palette.setColor(QPalette.Base, QColor("#272822"))
+                palette.setColor(QPalette.Text, QColor("#F8F8F2"))
+            else:
+                palette.setColor(QPalette.Base, QColor("#FFFFFF"))
+                palette.setColor(QPalette.Text, QColor("#000000"))
+        
+        self.editor.setPalette(palette)
 
+    def _on_style_changed(self, style_name: str):
+        """当用户从菜单选择一个新的语法风格时调用"""
+        self.current_style_name = style_name
+        self.statusBar().showMessage(f"语法风格已切换为: {style_name}", 2000)
+        if self.is_dark_theme:
+            self.dark_style_name = style_name
+        else:
+            self.light_style_name = style_name
+        # 对当前打开的文件重新应用高亮
+        if self.current_file_path:
+            self._apply_syntax_highlighting(self.current_file_path)
 
     def _on_run_without_terminal(self):
         """使用subprocess在后台运行命令，并将输出重定向到输出面板"""

@@ -1,13 +1,13 @@
 import sys
 import os
 from PySide6.QtWidgets import QMenuBar, QMenu
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QKeySequence,QActionGroup
 from PySide6.QtCore import Signal
 
 
 class MenuBar(QMenuBar):
     action_triggered = Signal(str)
-
+    style_changed = Signal(str) # 高亮风格变化
     def __init__(self, parent = None):
         super().__init__()
         self._init_menu_content()
@@ -55,6 +55,32 @@ class MenuBar(QMenuBar):
         self._add_action(appearance_menu,"Zoom &Out","zoom_out","Decrease editor zoom level","Ctrl+-")
         appearance_menu.addSeparator() 
 
+        style_menu = QMenu("Syntax Style", self)
+        appearance_menu.addMenu(style_menu)
+        
+        # 使用 QActionGroup 来确保同一时间只有一个风格被选中
+        self.style_group = QActionGroup(self)
+        self.style_group.setExclusive(True)
+
+        # 定义我们想要提供的风格列表
+        styles = ['default', 'vs', 'emacs', 'solarized-light', 'monokai', 'solarized-dark', 'github-dark']
+        
+        for style_name in styles:
+            # style_name.title() 会让 'github-dark' 变成 'Github-Dark'
+            action = QAction(style_name.title(), self, checkable=True)
+            self.style_group.addAction(action)
+            style_menu.addAction(action)
+
+            # 当动作被触发时，发射 style_changed 信号
+            # 使用 lambda 捕获 style_name 的当前值
+            action.triggered.connect(lambda checked, name=style_name: self.style_changed.emit(name))
+
+            # 设置 'default' 为默认选中的项
+            if style_name == 'default':
+                action.setChecked(True)
+        appearance_menu.addSeparator() 
+
+
         # 主题切换    
         self._add_action(appearance_menu,"Dark &Theme","toggle_dark_theme","Toggle Dark Theme","F12",is_checkable=True)
         
@@ -101,3 +127,12 @@ class MenuBar(QMenuBar):
         action.triggered.connect(lambda: self.action_triggered.emit(action_name))
         menu.addAction(action)
         return action
+
+    def update_style_selection(self, style_name: str):
+        """根据给定的风格名称，更新菜单中的选中项"""
+        # 遍历 QActionGroup 中的所有 action
+        for action in self.style_group.actions():
+            # action.data() 返回我们之前存储的小写风格名
+            if action.data() == style_name:
+                action.setChecked(True)
+                break
