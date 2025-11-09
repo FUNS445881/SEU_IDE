@@ -129,6 +129,7 @@ class MainWindow(QMainWindow):
             "edit_find": self._show_find_dialog,
             "edit_replace":self.find_panel.replace_all_button.click,
             "select_all": self.editor_controller.select_all,
+            "select_all_matches": self._on_select_all_matches,
             "zoom_in": self.editor_controller.zoom_in,
             "zoom_out": self.editor_controller.zoom_out,
             "zoom_reset": self.editor_controller.zoom_reset,
@@ -137,7 +138,6 @@ class MainWindow(QMainWindow):
             "toggle_sidebar": self._on_toggle_sidebar,
             "toggle_output": self._on_toggle_output,
             "toggle_dark_theme": self._on_toggle_dark_theme,
-            "toggle_select_all_matches": self.editor_controller.select_all_matches
         }
 
     def _init_find_panel(self):
@@ -441,8 +441,11 @@ class MainWindow(QMainWindow):
 
     def _on_select_all_matches(self):
         """处理选择所有匹配项动作的槽函数"""
-        self.statusBar().showMessage("功能待实现: 选择所有匹配项", 1500)
-        print("Console: 正在执行选择所有匹配项操作...")
+        # 设置查找文本为当前选择内容
+        self.find_panel.search_input.setText(self.editor.textCursor().selectedText())
+        # 显示查找面板（如果未显示）
+        if not self.find_panel.isVisible():
+            self._show_find_dialog()
 
     def _on_toggle_fullscreen(self):
         """处理查看外观里全屏动作的槽函数"""
