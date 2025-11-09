@@ -18,8 +18,9 @@ class MainWindow(QMainWindow):
         self.current_file_path = None  # 跟踪当前打开的文件路径
         
         self.init_ui()
-        self._init_controller()
         self._init_find_panel()
+        self._init_controller()
+
         # 安装事件过滤器
         QApplication.instance().installEventFilter(self)
         self.default_palette = QApplication.instance().palette()
@@ -126,6 +127,7 @@ class MainWindow(QMainWindow):
             "edit_copy": self.editor_controller.copy,
             "edit_paste": self.editor_controller.paste,
             "edit_find": self._show_find_dialog,
+            "edit_replace":self.find_panel.replace_all_button.click,
             "select_all": self.editor_controller.select_all,
             "zoom_in": self.editor_controller.zoom_in,
             "zoom_out": self.editor_controller.zoom_out,
@@ -146,6 +148,7 @@ class MainWindow(QMainWindow):
         self.find_panel.find_next_triggered.connect(self._on_find_next)
         self.find_panel.find_previous_triggered.connect(self._on_find_previous)
         self.find_panel.closed.connect(self._on_find_panel_closed)
+        self.find_panel.replace_all_triggered.connect(self._on_replace_all)
 
     def _position_find_panel(self):
         """将查找面板定位在编辑器的右上角"""
@@ -165,6 +168,9 @@ class MainWindow(QMainWindow):
                         # 手动模拟按钮点击，确保功能被执行
                         self.find_panel.next_button.click()
                         # 返回 True，消费事件，阻止其原生处理（发射信号）和冒泡，这样就不会继续传递给QPlainTextEdit
+                        return True
+                    elif watched is self.find_panel.replace_input:
+                        self.find_panel.replace_all_button.click()
                         return True
         
         return super().eventFilter(watched, event)
@@ -444,6 +450,7 @@ class MainWindow(QMainWindow):
         self.find_panel.search_input.selectAll()
         self.find_panel._on_search()  # 自动执行一次搜索
 
+# 下面这几个其实完全可以丢进controller里面，但是我懒了,嘻嘻
     def _on_find_triggered(self, term, case_sensitive, whole_word):
         """处理查找请求"""
         current, total = self.editor_controller.edit_find(term, case_sensitive, whole_word)
@@ -465,6 +472,16 @@ class MainWindow(QMainWindow):
         """当查找面板关闭时，清除搜索状态和高亮"""
         self.editor_controller._clear_search()
         self.editor.setFocus() # 将焦点还给编辑器
+
+    def _on_replace_all(self,replace_term):
+        count = self.editor_controller.replace_all(replace_term)
+        if count > 0:
+            self.statusBar().showMessage(f"已替换 {count} 处匹配项", 3000)
+            print(f"Console: 已替换 {count} 处匹配项")
+            self.find_panel.update_results_label(-1,0)
+        else:
+            self.statusBar().showMessage("未找到匹配项，未进行替换", 3000)
+            print("Console: 未找到匹配项，未进行替换")
 
     def _on_toggle_output(self):
         """处理查看输出动作的槽函数"""

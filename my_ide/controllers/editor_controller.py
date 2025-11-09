@@ -142,7 +142,30 @@ class EditorController:
             selections.append(selection)
         self.editor.setExtraSelections(selections)
 
-    def edit_replace(self):
+    def replace_all(self,replace_term):
         """替换功能的实现"""
-        # 这里可以添加替换逻辑
-        pass
+        if not self.last_search_results:
+            print("replace_all没有查找结果")
+            return 0
+        replace_count = len(self.last_search_results)
+
+        # 开启一个 "宏" 操作，以便所有替换可以被一次性撤销
+        self.editor.textCursor().beginEditBlock()
+        
+        # 关键：我们从后向前遍历已有的结果列表
+        # 这样做是为了防止因替换文本长度不同而导致的前方结果位置失效
+        for cursor in reversed(self.last_search_results):
+            # 将编辑器的光标设置为当前要操作的结果
+            self.editor.setTextCursor(cursor)
+            # 获取当前光标并删除选中文本
+            current_cursor = self.editor.textCursor()
+            current_cursor.removeSelectedText()  # 这是在 QTextCursor 上调用
+            # 插入新文本
+            current_cursor.insertText(replace_term)
+
+        # 结束 "宏" 操作
+        self.editor.textCursor().endEditBlock()
+        
+        # 替换完成后，清除旧的搜索高亮和结果
+        self._clear_search()
+        return replace_count
