@@ -32,9 +32,6 @@ my_ide/
 │   ├── hello.py          # 测试终端指令
 |   └── test.c            # 高光测试文件
 │
-├── scripts/              # 辅助脚本
-│   └── build.py          # (可选) 打包应用的脚本
-│
 ├── requirements.txt      # 项目依赖列表 (pip install -r requirements.txt)
 │
 └── README.md             # 项目说明文件

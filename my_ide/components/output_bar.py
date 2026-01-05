@@ -1,12 +1,14 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout,QHBoxLayout, QTabWidget, QPlainTextEdit,QScrollBar,
                                QTableWidget, QTableWidgetItem, QHeaderView)
-from PySide6.QtCore import Qt,QCoreApplication
+from PySide6.QtCore import Qt,QCoreApplication,Signal
 from PySide6.QtGui import QIcon
 from termqt import Terminal
 import sys
 import logging
 
 class OutputBar(QWidget):
+    problem_clicked = Signal(str, int)  # 文件路径，行号
+
     terminal = None
     terminal_io = None
     def __init__(self, parent=None):
@@ -68,6 +70,8 @@ class OutputBar(QWidget):
         self.problems_panel.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.problems_panel.setEditTriggers(QTableWidget.NoEditTriggers)
         self.problems_panel.setSelectionBehavior(QTableWidget.SelectRows)
+        # 问题面板点击事件
+        self.problems_panel.cellClicked.connect(self._on_problem_row_clicked)
 
         # 输出面板
         self.output_panel = QPlainTextEdit()
@@ -78,6 +82,23 @@ class OutputBar(QWidget):
         self.tabs.addTab(self.problems_panel, "问题")
         self.tabs.addTab(self.output_panel, "输出")
 
+    def _on_problem_row_clicked(self, row, column):
+        """
+        当用户点击表格的某一行时，获取该行的文件名和行号，并发射信号
+        """
+        # 获取第1列(文件)和第2列(行)的数据
+        file_item = self.problems_panel.item(row, 1)
+        line_item = self.problems_panel.item(row, 2)
+        
+        if file_item and line_item:
+            file_path = file_item.text()
+            try:
+                line_number = int(line_item.text())
+                # 发射信号给 MainWindow
+                self.problem_clicked.emit(file_path, line_number)
+            except ValueError:
+                pass
+
     # --- 公共方法 ---
     def add_problem(self, description, file, line, severity):
         row_position = self.problems_panel.rowCount()
@@ -86,6 +107,10 @@ class OutputBar(QWidget):
         self.problems_panel.setItem(row_position, 1, QTableWidgetItem(file))
         self.problems_panel.setItem(row_position, 2, QTableWidgetItem(str(line)))
         self.problems_panel.setItem(row_position, 3, QTableWidgetItem(severity))
+
+    def clear_problems(self):
+        print("清理问题面板")
+        self.problems_panel.setRowCount(0)
 
     def append_output(self, text):
         self.output_panel.appendPlainText(text)

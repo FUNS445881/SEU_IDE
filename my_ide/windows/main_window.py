@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 import subprocess
 
 import qdarkstyle
@@ -81,6 +82,14 @@ class MainWindow(QMainWindow):
         self.dark_style_name = 'monokai'    # 默认的深色语法风格
 
         self.current_style_name = 'default'
+
+        # 编译器
+        self.compiler_timer = QTimer(self)
+        self.compiler_timer.timeout.connect(self._run_compiler_cycle)
+        self.compiler_timer.start(10000)
+
+        self.error_json_path = os.path.join(os.getcwd(), "my_ide", "core", "error_missing_brace.json")
+        # print(f"Console: Error JSON path set to {self.error_json_path}")
 
     def init_ui(self):
         """
@@ -228,13 +237,80 @@ class MainWindow(QMainWindow):
         # 将这个 dock widget 添加到主窗口的底部
         self.addDockWidget(Qt.BottomDockWidgetArea, self.output_dock)
         
-        #添加一些示例内容，以便运行后能看到效果
-        self.output_bar.append_output("IDE 启动成功。")
-        self.output_bar.add_problem("变量 'x' 未被使用", "main.py", 15, "警告")
-        self.output_bar.add_problem("缺少分号", "style.css", 22, "错误")
+        self.output_bar.problem_clicked.connect(self._jump_to_problem_location)
 
         # 隐藏
         self.output_dock.hide()
+
+    def _run_compiler_cycle(self):
+        """
+        每10秒被调用一次。
+        尝试读取编译器的输出文件，并更新 UI。
+        """
+        # 如果当前没有打开任何文件，就不应该显示错误（或者清空错误）
+        if not self.current_file_path:
+            self.output_bar.clear_problems()
+            return
+
+        print("Console: Checking for compiler errors...")
+        # 
+        # 未来这里负责调用编译器
+        #
+        self._parse_problems_and_update_ui()
+
+    def _parse_problems_and_update_ui(self):
+        """读取 JSON 并更新 UI，描述只显示 message"""
+        if not os.path.exists(self.error_json_path):
+            return
+
+        try:
+            with open(self.error_json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            self.output_bar.clear_problems()
+            
+            current_file_name = os.path.basename(self.current_file_path)
+            
+            for error in data.get("errors", []):
+                line = error.get("line", 1)
+                # 直接使用 message，不进行任何拼接
+                msg = error.get("message", "Unknown Error")
+                
+                self.output_bar.add_problem(
+                    description=msg,
+                    file=current_file_name,
+                    line=line,
+                    severity="Error"
+                )
+                
+        except Exception as e:
+            print(f"Console: Error updating problems: {e}")
+
+    def _jump_to_problem_location(self, file_name, line_number):
+        """
+        响应问题点击，跳转到对应行
+        """
+        # 确认点击的是当前文件的错误
+        current_name = os.path.basename(self.current_file_path) if self.current_file_path else ""
+        
+        if current_name == file_name:
+            doc = self.editor.document()
+            # line_number 从 1 开始，block number 从 0 开始
+            block = doc.findBlockByNumber(line_number - 1)
+            
+            if block.isValid():
+                cursor = QTextCursor(block)
+                cursor.movePosition(QTextCursor.StartOfBlock)
+                cursor.movePosition(QTextCursor.EndOfBlock, QTextCursor.KeepAnchor)
+                
+                self.editor.setTextCursor(cursor)
+                self.editor.ensureCursorVisible()
+                self.editor.setFocus()
+                
+                self.statusBar().showMessage(f"已跳转到第 {line_number} 行", 2000)
+        else:
+            # 这种情况理论上在我们的逻辑里不会发生，因为我们只加载当前文件的错误
+            pass
 
     def _position_find_panel(self):
         """将查找面板定位在编辑器的右上角"""
@@ -383,7 +459,9 @@ class MainWindow(QMainWindow):
                     # 延迟执行搜索，确保文本已加载
                     QTimer.singleShot(0, self.find_panel._on_search)
                 self._apply_syntax_highlighting(file_path)
-
+                self.output_bar.clear_problems()
+                self.compiler_timer.start(10000)
+                # self._run_compiler_cycle()
         except Exception as e:
             self.statusBar().showMessage(f"打开文件失败: {str(e)}", 3000)
             print(f"Error opening file: {e}")
@@ -606,6 +684,7 @@ class MainWindow(QMainWindow):
             # 更具后缀判断lexer
             lexer = lexers.get_lexer_for_filename(file_path, stripall=True)
             print(f"Console: Found lexer for {os.path.basename(file_path)}: {lexer.name}")
+            print(f"{type(lexer)}")
         except ClassNotFound:
             # 不进行高亮
             print(f"Console: No lexer found for {os.path.basename(file_path)}.")
