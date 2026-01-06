@@ -460,8 +460,9 @@ class MainWindow(QMainWindow):
                     QTimer.singleShot(0, self.find_panel._on_search)
                 self._apply_syntax_highlighting(file_path)
                 self.output_bar.clear_problems()
+                # 重启编译器定时器，并对当前文本进行一次分析
                 self.compiler_timer.start(10000)
-                # self._run_compiler_cycle()
+                self._run_compiler_cycle()
         except Exception as e:
             self.statusBar().showMessage(f"打开文件失败: {str(e)}", 3000)
             print(f"Error opening file: {e}")
