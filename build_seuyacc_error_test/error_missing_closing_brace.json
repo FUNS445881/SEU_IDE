@@ -1,0 +1,11 @@
+{
+  "errors": [
+    {
+      "line": 5,
+      "message": "syntax error, unexpected token",
+      "actual": "",
+      "expected": ["'('", "NE", "EQ", "BREAK", "DECNUM", "RETURN", "LE", "VOID", "'}'"]
+    }
+  ],
+  "errorCount": 1
+}

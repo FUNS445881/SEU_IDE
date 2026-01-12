@@ -27,13 +27,20 @@ class ProcessWorker(QObject):
     new_output = Signal(str)
     finished = Signal(int)
 
-    def __init__(self, command, parent=None):
+    def __init__(self, command, parent=None, log_file: str | None = None):
         super().__init__(parent)
         self.command = command
+        self.log_file = log_file
 
     def run(self):
-        """执行命令并实时发送输出"""
+        """执行命令并实时发送输出（可选写入日志文件）"""
+        log_fp = None
         try:
+            if self.log_file:
+                # 确保日志目录存在
+                os.makedirs(os.path.dirname(self.log_file), exist_ok=True)
+                log_fp = open(self.log_file, 'w', encoding='utf-8', errors='replace')
+
             # 在Windows上使用 CREATE_NO_WINDOW 防止弹出控制台窗口
             creationflags = 0
             if sys.platform == "win32":
@@ -53,15 +60,25 @@ class ProcessWorker(QObject):
 
             # 实时读取输出
             for line in iter(process.stdout.readline, ''):
-                self.new_output.emit(line.strip())
-            
+                line = line.rstrip('\n')
+                if log_fp:
+                    log_fp.write(line + '\n')
+                    log_fp.flush()
+                self.new_output.emit(line)
+
             process.stdout.close()
             return_code = process.wait()
             self.finished.emit(return_code)
 
         except Exception as e:
+            if log_fp:
+                log_fp.write(f"执行时发生错误: {e}\n")
+                log_fp.flush()
             self.new_output.emit(f"执行时发生错误: {e}")
             self.finished.emit(-1)
+        finally:
+            if log_fp:
+                log_fp.close()
 
 
 class MainWindow(QMainWindow):
@@ -253,10 +270,83 @@ class MainWindow(QMainWindow):
             return
 
         print("Console: Checking for compiler errors...")
-        # 
-        # 未来这里负责调用编译器
-        #
+        # 调用编译器生成最新的诊断 JSON
+        compiler_path = self._get_compiler_executable()
+        if not compiler_path:
+            print("Console: Compiler executable not found, skip diagnostics.")
+            return
+
+        log_path = os.path.join(os.path.dirname(self.error_json_path), "error_log.txt")
+
+        try:
+            # 使用当前文件作为编译器的标准输入
+            with open(self.current_file_path, 'r', encoding='utf-8', errors='ignore') as src:
+                result = subprocess.run(
+                    [compiler_path],
+                    stdin=src,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    encoding='utf-8',
+                    errors='replace',
+                    cwd=os.path.dirname(compiler_path),
+                    timeout=10
+                )
+
+            output = result.stdout or ""
+
+            # 写入原始日志（等价于 tee 到 error_log.txt）
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, 'w', encoding='utf-8', errors='replace') as log_fp:
+                log_fp.write(output)
+
+            # 从输出中提取 JSON 诊断信息并写入 error_missing_brace.json
+            diagnostics = self._extract_json_from_output(output)
+            with open(self.error_json_path, 'w', encoding='utf-8') as json_fp:
+                json.dump(diagnostics, json_fp, ensure_ascii=False, indent=2)
+
+        except Exception as e:
+            print(f"Console: Failed to run compiler diagnostics: {e}")
+
+        # 无论运行是否成功，都尝试刷新问题面板
         self._parse_problems_and_update_ui()
+
+    def _get_compiler_executable(self) -> str | None:
+        """根据当前工程结构推断编译器可执行文件路径"""
+        try:
+            current_path = os.path.dirname(os.path.abspath(__file__))
+            root_path = os.path.dirname(current_path)  # my_ide 目录
+            core_dir = os.path.join(root_path, "core")
+            compiler_path = os.path.join(core_dir, "minic_parser")
+
+            # Windows 下如果只有 .exe 则兼容处理
+            if sys.platform == "win32" and not os.path.exists(compiler_path):
+                exe_path = compiler_path + ".exe"
+                if os.path.exists(exe_path):
+                    compiler_path = exe_path
+
+            if os.path.exists(compiler_path):
+                return compiler_path
+        except Exception as e:
+            print(f"Console: error while resolving compiler path: {e}")
+        return None
+
+    def _extract_json_from_output(self, output: str) -> dict:
+        """从编译器输出中抽取 JSON 片段，兼容前后带日志的情况"""
+        if not output:
+            return {"errors": [], "errorCount": 0}
+
+        start = output.find('{')
+        end = output.rfind('}')
+        if start != -1 and end != -1 and end > start:
+            candidate = output[start:end + 1]
+            try:
+                return json.loads(candidate)
+            except Exception as e:
+                print(f"Console: failed to parse diagnostics JSON: {e}")
+
+        # 回退到空错误列表
+        return {"errors": [], "errorCount": 0}
 
     def _parse_problems_and_update_ui(self):
         """读取 JSON 并更新 UI，描述只显示 message"""
@@ -740,16 +830,39 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("已有命令正在运行，请稍后...", 3000)
             return
 
-        command, ok = QInputDialog.getText(self, "运行命令", "输入命令:", QLineEdit.Normal)
+        # 目标命令形如："$build_dir/minic_parser" < "$root_dir/examples/$test_file" > "$log_file" 2>&1
+        # 这里将 $test_file 映射为当前编辑器打开的源文件，$log_file 放在项目根目录下的 result 目录中。
+        if not self.current_file_path:
+            self.statusBar().showMessage("当前没有打开的源文件，无法运行编译器", 3000)
+            return
+
+        compiler_path = self._get_compiler_executable()
+        if not compiler_path:
+            self.statusBar().showMessage("未找到编译器可执行文件 minic_parser", 3000)
+            return
+
+        # 构造默认命令：等价于 "$build_dir/minic_parser" < "$current_file" > "$log_file" 2>&1
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        result_dir = os.path.join(project_root, "result")
+        os.makedirs(result_dir, exist_ok=True)
+
+        base_name = os.path.splitext(os.path.basename(self.current_file_path))[0]
+        log_file = os.path.join(result_dir, f"{base_name}_compile.log")
+
+        # 注意：stdin 通过重定向 "<" 传入当前文件路径，日志文件通过 ">" 和 "2>&1" 保存在 log_file
+        default_command = f'"{compiler_path}" < "{self.current_file_path}" > "{log_file}" 2>&1'
+
+        # 仍然保留可配置能力：预填充默认命令，用户可修改
+        command, ok = QInputDialog.getText(self, "运行命令", "输入命令:", QLineEdit.Normal, default_command)
 
         if ok and command:
             # 准备UI
             self.output_dock.show()
             self.output_bar.tabs.setCurrentWidget(self.output_bar.output_panel)
             self.output_bar.clear_output()
-            self.output_bar.append_output(f"> {command}\n" + "="*20)
+            self.output_bar.append_output(f"> {command}\n日志文件: {log_file}\n" + "="*20)
 
-            # 创建并配置线程和worker
+            # 创建并配置线程和worker（日志文件由 shell 重定向负责，这里不再单独写入）
             self.run_thread = QThread()
             self.run_worker = ProcessWorker(command)
             self.run_worker.moveToThread(self.run_thread)
@@ -758,15 +871,15 @@ class MainWindow(QMainWindow):
             self.run_thread.started.connect(self.run_worker.run)
             self.run_worker.new_output.connect(self.output_bar.append_output)
 
-            # 3. Worker 任务完成时，打印最终信息，并请求线程退出
+            # Worker 任务完成时，打印最终信息，并请求线程退出
             self.run_worker.finished.connect(self._on_process_finished)
             self.run_worker.finished.connect(self.run_thread.quit)
             
-            # 4. 确保在任务完成后，worker 和 thread 对象最终会被Qt安全删除
+            # 确保在任务完成后，worker 和 thread 对象最终会被Qt安全删除
             self.run_worker.finished.connect(self.run_worker.deleteLater)
             self.run_thread.finished.connect(self.run_thread.deleteLater)
 
-            # 5. 当线程真正结束后，再执行最终的清理工作,防止闪退
+            # 当线程真正结束后，再执行最终的清理工作,防止闪退
             self.run_thread.finished.connect(self._on_thread_finished)
 
             # 启动线程
