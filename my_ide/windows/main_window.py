@@ -6,7 +6,8 @@ import subprocess
 import qdarkstyle
 
 from PySide6.QtWidgets import (QApplication,QMainWindow,QFileDialog, QDockWidget, 
-                                QHBoxLayout, QStackedWidget, QWidget,QDialog,QInputDialog,QLineEdit)
+                                QHBoxLayout, QVBoxLayout, QStackedWidget, QWidget,
+                                QDialog,QInputDialog,QLineEdit,QLabel,QPushButton)
 from PySide6.QtGui import QAction,QTextCursor,QTextOption,QResizeEvent,QColor,QPalette
 from PySide6.QtCore import Qt,QEvent,QTimer, QThread, QObject, Signal
 from my_ide.components.file_tree import FileTreeWidget
@@ -81,12 +82,66 @@ class ProcessWorker(QObject):
                 log_fp.close()
 
 
+class RunCommandDialog(QDialog):
+    """自定义运行命令对话框，支持上一条命令/默认命令两个按钮"""
+
+    def __init__(self, parent, default_command: str, last_command: str | None):
+        super().__init__(parent)
+        self.setWindowTitle("运行命令")
+        self._default_command = default_command
+        self._last_command = last_command
+
+        layout = QVBoxLayout(self)
+
+        label = QLabel("输入命令:")
+        layout.addWidget(label)
+
+        self.line_edit = QLineEdit(self)
+        # 初始使用默认命令，并把宽度调大一些以便完整展示
+        self.line_edit.setText(default_command)
+        self.line_edit.setMinimumWidth(600)
+        layout.addWidget(self.line_edit)
+
+        button_row = QHBoxLayout()
+
+        self.last_button = QPushButton("上一条命令", self)
+        self.default_button = QPushButton("默认命令", self)
+        self.ok_button = QPushButton("OK", self)
+        self.cancel_button = QPushButton("Cancel", self)
+
+        button_row.addWidget(self.last_button)
+        button_row.addWidget(self.default_button)
+        button_row.addStretch()
+        button_row.addWidget(self.ok_button)
+        button_row.addWidget(self.cancel_button)
+
+        layout.addLayout(button_row)
+
+        self.last_button.clicked.connect(self._use_last_command)
+        self.default_button.clicked.connect(self._use_default_command)
+        self.ok_button.clicked.connect(self.accept)
+        self.cancel_button.clicked.connect(self.reject)
+
+        # 让回车键等价于 OK
+        self.line_edit.returnPressed.connect(self.accept)
+
+        self.adjustSize()
+
+    def _use_last_command(self):
+        if self._last_command:
+            self.line_edit.setText(self._last_command)
+
+    def _use_default_command(self):
+        self.line_edit.setText(self._default_command)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.current_file_path = None  # 跟踪当前打开的文件路径
         self.run_thread = None # 用于跟踪运行命令的线程
         self.run_worker = None # 用于跟踪运行命令的worker
+        self.last_run_without_terminal_command = None  # 记录上一条 Run Without Terminal 命令
         self.init_ui()
         self._init_find_panel()
         self._init_output_bar()
@@ -852,10 +907,16 @@ class MainWindow(QMainWindow):
         # 注意：stdin 通过重定向 "<" 传入当前文件路径，日志文件通过 ">" 和 "2>&1" 保存在 log_file
         default_command = f'"{compiler_path}" < "{self.current_file_path}" > "{log_file}" 2>&1'
 
-        # 仍然保留可配置能力：预填充默认命令，用户可修改
-        command, ok = QInputDialog.getText(self, "运行命令", "输入命令:", QLineEdit.Normal, default_command)
+        # 弹出自定义对话框：支持上一条命令/默认命令
+        dialog = RunCommandDialog(self, default_command, self.last_run_without_terminal_command)
+        if dialog.exec() == QDialog.Accepted:
+            command = dialog.line_edit.text().strip()
+        else:
+            command = ""
 
-        if ok and command:
+        if command:
+            # 记录本次命令，供下次“上一条命令”使用
+            self.last_run_without_terminal_command = command
             # 准备UI
             self.output_dock.show()
             self.output_bar.tabs.setCurrentWidget(self.output_bar.output_panel)
