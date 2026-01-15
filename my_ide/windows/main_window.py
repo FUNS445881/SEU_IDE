@@ -7,7 +7,7 @@ import qdarkstyle
 
 from PySide6.QtWidgets import (QApplication,QMainWindow,QFileDialog, QDockWidget, 
                                 QHBoxLayout, QVBoxLayout, QStackedWidget, QWidget,
-                                QDialog,QInputDialog,QLineEdit,QLabel,QPushButton)
+                                QDialog,QInputDialog,QLineEdit,QLabel,QPushButton,QCheckBox)
 from PySide6.QtGui import QAction,QTextCursor,QTextOption,QResizeEvent,QColor,QPalette
 from PySide6.QtCore import Qt,QEvent,QTimer, QThread, QObject, Signal
 from my_ide.components.file_tree import FileTreeWidget
@@ -133,6 +133,49 @@ class RunCommandDialog(QDialog):
 
     def _use_default_command(self):
         self.line_edit.setText(self._default_command)
+
+
+class AssembleDialog(QDialog):
+    """汇编选项对话框"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Assembler Options")
+        
+        layout = QVBoxLayout(self)
+        
+        self.hex_checkbox = QCheckBox("Generate Hex Files (--hex)", self)
+        self.debug_checkbox = QCheckBox("Generate Debug Info (--debug)", self)
+        self.bios_checkbox = QCheckBox("BIOS Only Mode (--bios-only)", self)
+        
+        # 默认选中 hex 和 debug (根据常用习惯，也可以都不选)
+        self.hex_checkbox.setChecked(True)
+        self.debug_checkbox.setChecked(True)
+
+        layout.addWidget(self.hex_checkbox)
+        layout.addWidget(self.debug_checkbox)
+        layout.addWidget(self.bios_checkbox)
+        
+        button_row = QHBoxLayout()
+        self.ok_button = QPushButton("Assemble", self)
+        self.cancel_button = QPushButton("Cancel", self)
+        
+        button_row.addStretch()
+        button_row.addWidget(self.ok_button)
+        button_row.addWidget(self.cancel_button)
+        layout.addLayout(button_row)
+        
+        self.ok_button.clicked.connect(self.accept)
+        self.cancel_button.clicked.connect(self.reject)
+        
+    def get_options(self):
+        options = []
+        if self.hex_checkbox.isChecked():
+            options.append("--hex")
+        if self.debug_checkbox.isChecked():
+            options.append("--debug")
+        if self.bios_checkbox.isChecked():
+            options.append("--bios-only")
+        return options
 
 
 class MainWindow(QMainWindow):
@@ -283,6 +326,7 @@ class MainWindow(QMainWindow):
             "toggle_dark_theme": self._on_toggle_dark_theme,
             "run_with_terminal": self._on_run_with_terminal,
             "run_without_terminal": self._on_run_without_terminal,
+            "assemble": self._on_assemble,
         }
 
     def _init_find_panel(self):
@@ -946,6 +990,68 @@ class MainWindow(QMainWindow):
             # 启动线程
             self.run_thread.start()
             self.statusBar().showMessage(f"正在执行: {command}", 3000)
+
+    def _on_assemble(self):
+        """调用core下面的minisys-asm.exe解析core下的asm并在生成output文件夹"""
+        if self.run_thread and self.run_thread.isRunning():
+            self.statusBar().showMessage("已有命令正在运行，请稍后...", 3000)
+            return
+
+        # 1. 解析路径
+        # 根据当前文件结构: IDE/my_ide/windows/main_window.py -> IDE/my_ide/core/minisys-asm.exe
+        current_path = os.path.dirname(os.path.abspath(__file__))
+        root_path = os.path.dirname(current_path)  # my_ide 目录
+        core_dir = os.path.join(root_path, "core")
+        exe_path = os.path.join(core_dir, "minisys-asm.exe")
+        input_asm = os.path.join(core_dir, "output.asm")
+        output_dir = os.path.join(core_dir, "output")
+
+        # 2. 检查必要文件是否存在
+        if not os.path.exists(exe_path):
+             self.statusBar().showMessage(f"未找到汇编器: {exe_path}", 5000)
+             return
+        if not os.path.exists(input_asm):
+             self.statusBar().showMessage(f"未找到输入文件: {input_asm}，请先运行编译", 5000)
+             return
+        
+        # 确保输出目录存在
+        os.makedirs(output_dir, exist_ok=True)
+
+        # 3. 弹出选项对话框
+        dialog = AssembleDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            options = dialog.get_options()
+            
+            # 4. 构造命令
+            # 格式: minisys-asm.exe <input_file> <output_dir> [options]
+            # 注意 Windows 路径可能包含空格，建议加引号
+            cmd_parts = [f'"{exe_path}"', f'"{input_asm}"', f'"{output_dir}"']
+            cmd_parts.extend(options)
+            command = " ".join(cmd_parts)
+            
+            # 5. 执行命令 (复用 ProcessWorker)
+            self.output_dock.show()
+            self.output_bar.tabs.setCurrentWidget(self.output_bar.output_panel)
+            self.output_bar.clear_output()
+            self.output_bar.append_output(f"> {command}\n" + "="*20)
+            
+            self.run_thread = QThread()
+            self.run_worker = ProcessWorker(command)
+            self.run_worker.moveToThread(self.run_thread)
+            
+            self.run_thread.started.connect(self.run_worker.run)
+            self.run_worker.new_output.connect(self.output_bar.append_output)
+            
+            # 这里的 process finished 逻辑和 Run Without Terminal 是一样的
+            self.run_worker.finished.connect(self._on_process_finished)
+            self.run_worker.finished.connect(self.run_thread.quit)
+            self.run_worker.finished.connect(self.run_worker.deleteLater)
+            self.run_thread.finished.connect(self.run_thread.deleteLater)
+            self.run_thread.finished.connect(self._on_thread_finished)
+            
+            self.run_thread.start()
+            self.statusBar().showMessage(f"正在汇编...", 3000)
+
 
     def _on_process_finished(self, return_code):
         """当后台进程结束后调用的槽函数"""
