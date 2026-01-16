@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import subprocess
+import re
 
 import qdarkstyle
 
@@ -560,6 +561,56 @@ class MainWindow(QMainWindow):
 
             # 从输出中提取 JSON 诊断信息并写入 error_missing_brace.json
             diagnostics = self._extract_json_from_output(output)
+            
+            # -----------------------------------------------------------------
+            # 补充逻辑：分析输出的最后一行，捕获"无法识别的终结符"错误
+            # -----------------------------------------------------------------
+            lines = output.strip().split('\n')
+            if lines:
+                last_line = lines[-1].strip()
+                # 匹配模式: Error at line 4: 无法识别的终结符
+                match = re.search(r"Error at line (\d+):\s*(.*)", last_line)
+                if match:
+                    line_num = int(match.group(1))
+                    raw_msg = match.group(2)
+                    
+                    if "无法识别的终结符" in raw_msg:
+                        error_msg = "无法识别的终结符"
+                        
+                        # 检查源文件中该行是否包含中文全角符号
+                        source_lines = source_code.split('\n')
+                        if 0 <= line_num - 1 < len(source_lines):
+                            line_content = source_lines[line_num - 1]
+                            # 匹配中文汉字或全角标点
+                            # \u4e00-\u9fa5: 常用汉字
+                            # \uff00-\uffef: 全角ASCII、全角标点 (如 ！，（）)
+                            chinese_matches = re.findall(r'[\u4e00-\u9fa5\uff00-\uffef]', line_content)
+                            if chinese_matches:
+                                # 取第一个匹配到的符号
+                                char_found = chinese_matches[0]
+                                error_msg = f"遇到中文符号 '{char_found}'"
+                        
+                        # 将错误添加到 diagnostics 中
+                        if "errors" not in diagnostics:
+                            diagnostics["errors"] = []
+                        
+                        # 避免重复添加（简单的去重策略: 同行同消息）
+                        is_duplicate = False
+                        for err in diagnostics["errors"]:
+                            if err.get("line") == line_num and err.get("message") == error_msg:
+                                is_duplicate = True
+                                break
+                        
+                        if not is_duplicate:
+                            diagnostics["errors"].append({
+                                "line": line_num,
+                                "message": error_msg,
+                                "severity": "Error"
+                            })
+                            # 如果之前是 0 errors，更新一下 errorCount
+                            diagnostics["errorCount"] = diagnostics.get("errorCount", 0) + 1
+            # -----------------------------------------------------------------
+
             with open(self.error_json_path, 'w', encoding='utf-8') as json_fp:
                 json.dump(diagnostics, json_fp, ensure_ascii=False, indent=2)
 
