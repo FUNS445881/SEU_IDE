@@ -368,7 +368,7 @@ class MainWindow(QMainWindow):
             self.output_bar.clear_problems()
             return
 
-        print("Console: Checking for compiler errors...")
+        # print("Console: Checking for compiler errors...")
         # 调用编译器生成最新的诊断 JSON
         compiler_path = self._get_compiler_executable()
         if not compiler_path:
@@ -378,19 +378,19 @@ class MainWindow(QMainWindow):
         log_path = os.path.join(os.path.dirname(self.error_json_path), "error_log.txt")
 
         try:
-            # 使用当前文件作为编译器的标准输入
-            with open(self.current_file_path, 'r', encoding='utf-8', errors='ignore') as src:
-                result = subprocess.run(
-                    [compiler_path],
-                    stdin=src,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    encoding='utf-8',
-                    errors='replace',
-                    cwd=os.path.dirname(compiler_path),
-                    timeout=10
-                )
+            source_code = self.editor.toPlainText()
+            
+            result = subprocess.run(
+                [compiler_path],
+                input=source_code, # 直接传入字符串
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                cwd=os.path.dirname(compiler_path),
+                timeout=10
+            )
 
             output = result.stdout or ""
 
@@ -650,7 +650,7 @@ class MainWindow(QMainWindow):
                 self._apply_syntax_highlighting(file_path)
                 self.output_bar.clear_problems()
                 # 重启编译器定时器，并对当前文本进行一次分析
-                self.compiler_timer.start(10000)
+                self.compiler_timer.start(1000)
                 self._run_compiler_cycle()
         except Exception as e:
             self.statusBar().showMessage(f"打开文件失败: {str(e)}", 3000)

@@ -109,7 +109,7 @@ class OutputBar(QWidget):
         self.problems_panel.setItem(row_position, 3, QTableWidgetItem(severity))
 
     def clear_problems(self):
-        print("清理问题面板")
+        # print("清理问题面板")
         self.problems_panel.setRowCount(0)
 
     def append_output(self, text):
