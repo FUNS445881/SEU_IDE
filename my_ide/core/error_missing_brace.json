@@ -1,4 +1,14 @@
 {
-  "errors": [],
-  "errorCount": 0
+  "errors": [
+    {
+      "line": 1,
+      "message": "syntax error, unexpected token",
+      "actual": "111",
+      "expected": [
+        "ELSE",
+        "OR"
+      ]
+    }
+  ],
+  "errorCount": 1
 }

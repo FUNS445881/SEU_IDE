@@ -7,7 +7,8 @@ import qdarkstyle
 
 from PySide6.QtWidgets import (QApplication,QMainWindow,QFileDialog, QDockWidget, 
                                 QHBoxLayout, QVBoxLayout, QStackedWidget, QWidget,
-                                QDialog,QInputDialog,QLineEdit,QLabel,QPushButton,QCheckBox)
+                                QDialog,QInputDialog,QLineEdit,QLabel,QPushButton,QCheckBox,
+                                QTabBar, QMessageBox)
 from PySide6.QtGui import QAction,QTextCursor,QTextOption,QResizeEvent,QColor,QPalette
 from PySide6.QtCore import Qt,QEvent,QTimer, QThread, QObject, Signal
 from my_ide.components.file_tree import FileTreeWidget
@@ -182,29 +183,40 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.current_file_path = None  # 跟踪当前打开的文件路径
+        
+        # 多标签页管理状态
+        self.opened_tabs = []
+        self.current_tab_index = -1
+        self.ignore_tab_change = False
+        
         self.run_thread = None # 用于跟踪运行命令的线程
         self.run_worker = None # 用于跟踪运行命令的worker
         self.last_run_without_terminal_command = None  # 记录上一条 Run Without Terminal 命令
+
+        # 初始化主题相关变量（必须在 init_ui 之前，因为 init_ui 会触发 tab 创建和高亮应用）
+        self.default_palette = QApplication.instance().palette()
+        self.is_dark_theme = False
+        self.light_style_name = 'default'  # 默认的浅色语法风格
+        self.dark_style_name = 'monokai'    # 默认的深色语法风格
+        self.current_style_name = 'default'
+
         self.init_ui()
         self._init_find_panel()
         self._init_output_bar()
         self._init_controller()
         # 安装事件过滤器
         QApplication.instance().installEventFilter(self)
-        self.default_palette = QApplication.instance().palette()
-        self.is_dark_theme = False
-        self.light_style_name = 'default'  # 默认的浅色语法风格
-        self.dark_style_name = 'monokai'    # 默认的深色语法风格
-
-        self.current_style_name = 'default'
 
         # 编译器
         self.compiler_timer = QTimer(self)
         self.compiler_timer.timeout.connect(self._run_compiler_cycle)
-        self.compiler_timer.start(10000)
+        self.compiler_timer.start(1000)
 
         self.error_json_path = os.path.join(os.getcwd(), "my_ide", "core", "error_missing_brace.json")
         # print(f"Console: Error JSON path set to {self.error_json_path}")
+        
+        # 最后初始化默认标签页，确保 output_bar/controller 等都已准备好
+        self._on_new_file()
 
     def init_ui(self):
         """
@@ -222,15 +234,162 @@ class MainWindow(QMainWindow):
 
     def _init_editor(self):
         """
-        初始化代码编辑器
+        初始化代码编辑器，包含顶部的标签栏
         """
+        # 创建容器
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # 1. 标签栏
+        self.tab_bar = QTabBar()
+        self.tab_bar.setTabsClosable(True)
+        self.tab_bar.setMovable(True)
+        self.tab_bar.setShape(QTabBar.RoundedNorth)
+        # 连接信号
+        self.tab_bar.currentChanged.connect(self._on_tab_changed)
+        self.tab_bar.tabCloseRequested.connect(self._on_tab_close)
+        
+        layout.addWidget(self.tab_bar)
+
+        # 2. 编辑器 (单例)
         self.editor = CodeEditor(self)
-        self.setCentralWidget(self.editor)
+        layout.addWidget(self.editor)
+        
+        self.setCentralWidget(container)
+
         font = self.editor.font()
         font_metrics = self.editor.fontMetrics()
-        # tab四个空格
         tab_stop_width = font_metrics.horizontalAdvance(' ' * 4)
         self.editor.setTabStopDistance(tab_stop_width)
+
+        # 3. 监听编辑器修改，更新Tab状态
+        self.editor.textChanged.connect(self._on_editor_text_changed)
+
+        # 初始化一个默认的 Untitled 标签
+        # self._on_new_file() # 移到 __init__ 最后调用，避免初始化顺序问题
+
+    def _on_editor_text_changed(self):
+        """当编辑器内容变化时，标记当前Tab为脏"""
+        if self.ignore_tab_change: return
+        
+        if self.current_tab_index >= 0 and self.current_tab_index < len(self.opened_tabs):
+            # 只有当内容真正发生变化时才标记为 modified
+            # 这里的 tab['content'] 存储的是加载时或上次保存时的状态
+            # 注意：如果单纯切换Tab而不修改，_save_current_tab_state 会更新 tab['content']，所以对比也是一致的
+            current_text = self.editor.toPlainText()
+            tab = self.opened_tabs[self.current_tab_index]
+            
+            # 只有当内容和缓存的不一致时，才认为是修改了
+            if current_text != tab['content']:
+                if not tab['modified']:
+                    tab['modified'] = True
+                    self._update_tab_title(self.current_tab_index)
+
+    def _update_tab_title(self, index):
+        if index < 0 or index >= len(self.opened_tabs): return
+        tab = self.opened_tabs[index]
+        name = tab['name']
+        if tab['modified']:
+            name += " *"
+        self.tab_bar.setTabText(index, name)
+
+    def _save_current_tab_state(self):
+        """保存当前编辑器状态到内存"""
+        if self.current_tab_index >= 0 and self.current_tab_index < len(self.opened_tabs):
+            tab = self.opened_tabs[self.current_tab_index]
+            tab['content'] = self.editor.toPlainText()
+            tab['cursor'] = self.editor.textCursor().position()
+            tab['scroll'] = self.editor.verticalScrollBar().value()
+
+    def _load_tab_content(self, index):
+        """从内存加载Tab状态到编辑器"""
+        if index < 0 or index >= len(self.opened_tabs): return
+
+        self.ignore_tab_change = True # 防止 textChanged 信号误触发 dirty
+        try:
+            tab = self.opened_tabs[index]
+            self.editor.setPlainText(tab['content'])
+            self.current_file_path = tab['path']
+            
+            # 恢复光标
+            cursor = self.editor.textCursor()
+            cursor.setPosition(min(tab['cursor'], len(tab['content'])))
+            self.editor.setTextCursor(cursor)
+            
+            # 恢复滚动条
+            self.editor.verticalScrollBar().setValue(tab['scroll'])
+            self.editor.setFocus()
+
+            # 应用高亮
+            if tab['path']:
+                self._apply_syntax_highlighting(tab['path'])
+            else:
+                self._apply_syntax_highlighting("dummy.txt")
+
+            # 更新窗口标题
+            self.setWindowTitle(f"My IDE - {tab['path'] if tab['path'] else 'Untitled'}")
+            pass
+
+        finally:
+            self.ignore_tab_change = False
+
+    def _on_tab_changed(self, index):
+        """处理标签切换"""
+        if self.ignore_tab_change: return
+        if index == -1: return 
+        if index == self.current_tab_index: return
+
+        # 1. 保存旧 Tab 状态
+        if self.current_tab_index != -1:
+            self._save_current_tab_state()
+        
+        # 2. 切换索引
+        self.current_tab_index = index
+        
+        # 3. 加载新 Tab 状态
+        self._load_tab_content(index)
+        
+        # 4. 触发编译器检查 (切换文件后立即检查)
+        self.output_bar.clear_problems()
+        self._run_compiler_cycle()
+
+    def _on_tab_close(self, index):
+        """处理标签关闭"""
+        if index < 0 or index >= len(self.opened_tabs): return
+        
+        tab = self.opened_tabs[index]
+        if tab['modified']:
+            reply = QMessageBox.question(self, "保存更改", 
+                                        f"文件 {tab['name']} 尚未保存，是否保存？",
+                                        QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+            if reply == QMessageBox.Yes:
+                # 切换到该 tab 并保存
+                self.tab_bar.setCurrentIndex(index)
+                if not self._on_file_save():
+                    return # 保存失败或取消，中止关闭
+            elif reply == QMessageBox.Cancel:
+                return
+
+
+        is_current = (index == self.current_tab_index)
+        
+        self.tab_bar.removeTab(index)
+        del self.opened_tabs[index]
+        
+        if len(self.opened_tabs) == 0:
+            # 如果没有 tab 了，新建一个 Untitled
+            self.current_tab_index = -1 # 重置
+            self._on_new_file()
+        else:
+            # 更新 current_tab_index，因为列表变了
+            # 如果删除了前面的 tab，current_index 需要 -1
+            # 如果删除了当前的 tab，current_index 会指向新的位置（QTabBar自动处理了一部分显示，但我们需要同步 index）
+            current = self.tab_bar.currentIndex()
+            # 此时 QTabBar 已经更新了 currentIndex，我们只需要载入
+            self.current_tab_index = current
+            self._load_tab_content(current)
 
     def _init_status_bar(self):
         """
@@ -283,7 +442,7 @@ class MainWindow(QMainWindow):
         # file_tree初始化
         self.views["resource_manager"].set_root_path(current_dir)
         self.views["resource_manager"].tree_view.doubleClicked.connect(self._on_file_double_clicked)
-        self.views["resource_manager"].new_file_clicked.connect(self._on_new_file)
+        self.views["resource_manager"].new_file_clicked.connect(self._on_create_file_on_disk)
         self.views["resource_manager"].new_folder_clicked.connect(self._on_new_folder)
         self.views["resource_manager"].delete_button_clicked.connect(self._on_file_delete)
         # search_panel初始化
@@ -360,7 +519,7 @@ class MainWindow(QMainWindow):
 
     def _run_compiler_cycle(self):
         """
-        每10秒被调用一次。
+        每1秒被调用一次。
         尝试读取编译器的输出文件，并更新 UI。
         """
         # 如果当前没有打开任何文件，就不应该显示错误（或者清空错误）
@@ -531,8 +690,8 @@ class MainWindow(QMainWindow):
         QApplication.instance().removeEventFilter(self)
         super().closeEvent(event)
 
-    def _on_new_file(self):
-        """处理文件树中新建文件按钮点击的槽函数"""
+    def _on_create_file_on_disk(self):
+        """处理文件树中新建文件按钮点击的槽函数(原_on_new_file)"""
         # 1. 确定要在哪个目录下新建
         selected_path = self.file_tree_view.get_selected_file_path()
         if not selected_path:
@@ -637,24 +796,63 @@ class MainWindow(QMainWindow):
         打开指定路径的文件
         参数: file_path - 要打开的文件路径
         """
+        # 1. 检查是否已打开
+        for i, tab in enumerate(self.opened_tabs):
+            if tab['path'] and os.path.normpath(tab['path']) == os.path.normpath(file_path):
+                self.tab_bar.setCurrentIndex(i)
+                return
+
+        # 2. 读取文件并新建Tab
         try:
             with open(file_path, 'r', encoding='utf-8') as file:
                 content = file.read()
-                self.editor_controller._clear_search()
-                self.editor.setPlainText(content)
-                self.current_file_path = file_path
-                self.statusBar().showMessage(f"已打开文件: {file_path}", 3000)
-                if self.find_panel.isVisible():
-                    # 延迟执行搜索，确保文本已加载
-                    QTimer.singleShot(0, self.find_panel._on_search)
-                self._apply_syntax_highlighting(file_path)
-                self.output_bar.clear_problems()
-                # 重启编译器定时器，并对当前文本进行一次分析
-                self.compiler_timer.start(1000)
-                self._run_compiler_cycle()
+            
+            self._create_tab(file_path, content)
+            self.statusBar().showMessage(f"已打开文件: {file_path}", 3000)
+
         except Exception as e:
             self.statusBar().showMessage(f"打开文件失败: {str(e)}", 3000)
             print(f"Error opening file: {e}")
+
+    def _create_tab(self, path, content):
+        """创建一个新标签页并切换"""
+        name = os.path.basename(path) if path else "Untitled"
+        
+        # 如果当前是一个未修改的空Untitled标签，则复用它 (VSCode 风格)
+        if self.current_tab_index != -1 and self.current_tab_index < len(self.opened_tabs):
+            curr = self.opened_tabs[self.current_tab_index]
+            if curr['path'] is None and not curr['modified'] and not curr['content']:
+                curr['path'] = path
+                curr['name'] = name
+                curr['content'] = content 
+                self.tab_bar.setTabText(self.current_tab_index, name)
+                self._load_tab_content(self.current_tab_index)
+                return
+
+        # 记录当前Tab状态
+        if self.current_tab_index != -1:
+            self._save_current_tab_state()
+
+        new_tab = {
+            'path': path,
+            'name': name,
+            'content': content,
+            'modified': False,
+            'cursor': 0,
+            'scroll': 0
+        }
+        self.opened_tabs.append(new_tab)
+        
+        # 界面添加
+        self.tab_bar.addTab(name)
+        new_index = self.tab_bar.count() - 1
+        
+        # 切换过去
+        self.tab_bar.setCurrentIndex(new_index)
+
+    def _on_new_file(self):
+        """处理菜单栏新建文件动作 (新建Tab)"""
+        self._create_tab(None, "")
 
     def _on_file_folder_open(self):
         """处理文件夹打开动作的槽函数"""
@@ -674,15 +872,26 @@ class MainWindow(QMainWindow):
 
     def _on_file_save(self):
         """处理文件保存动作的槽函数"""
-        # 如果已有文件路径，则直接保存
+        # 如果已有文件路径，则保存到该路径
         if self.current_file_path:
             try:
+                content = self.editor.toPlainText()
                 with open(self.current_file_path, 'w', encoding='utf-8') as file:
-                    file.write(self.editor.toPlainText())
+                    file.write(content)
                 self.statusBar().showMessage(f"文件已保存: {self.current_file_path}", 3000)
+                
+                # 更新当前Tab状态为已保存
+                if self.current_tab_index >= 0 and self.current_tab_index < len(self.opened_tabs):
+                    tab = self.opened_tabs[self.current_tab_index]
+                    tab['modified'] = False
+                    tab['content'] = content # 同时更新缓存
+                    self._update_tab_title(self.current_tab_index)
+                
+                return True
             except Exception as e:
                 self.statusBar().showMessage(f"保存文件失败: {str(e)}", 3000)
                 print(f"Error saving file: {e}")
+                return False
         else:
             # 如果没有文件路径，则调用另存为对话框
             file_path, _ = QFileDialog.getSaveFileName(
@@ -694,14 +903,30 @@ class MainWindow(QMainWindow):
             
             if file_path:
                 try:
+                    content = self.editor.toPlainText()
                     with open(file_path, 'w', encoding='utf-8') as file:
-                        file.write(self.editor.toPlainText())
+                        file.write(content)
+                    
                     self.current_file_path = file_path
                     self.setWindowTitle(f"My IDE - {file_path}")
                     self.statusBar().showMessage(f"文件已保存: {file_path}", 3000)
+                    
+                    # 更新当前Tab信息
+                    if self.current_tab_index >= 0 and self.current_tab_index < len(self.opened_tabs):
+                        tab = self.opened_tabs[self.current_tab_index]
+                        tab['path'] = file_path
+                        tab['name'] = os.path.basename(file_path)
+                        tab['modified'] = False
+                        tab['content'] = content
+                        self._update_tab_title(self.current_tab_index)
+                        self._apply_syntax_highlighting(file_path) # 应用新文件高亮
+
+                    return True
                 except Exception as e:
                     self.statusBar().showMessage(f"保存文件失败: {str(e)}", 3000)
                     print(f"Error saving file: {e}")
+                    return False
+            return False
 
     def _on_file_double_clicked(self, index):
         """
