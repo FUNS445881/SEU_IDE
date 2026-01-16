@@ -1,7 +1,7 @@
 void main(void)
 {
     int x; 
-    int c;
+    int c；
     x = 1;
     while (1)
     {

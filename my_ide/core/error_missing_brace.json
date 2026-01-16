@@ -1,4 +1,10 @@
 {
-  "errors": [],
-  "errorCount": 0
+  "errors": [
+    {
+      "line": 4,
+      "message": "遇到中文符号 '；'",
+      "severity": "Error"
+    }
+  ],
+  "errorCount": 1
 }

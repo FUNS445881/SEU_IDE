@@ -562,9 +562,6 @@ class MainWindow(QMainWindow):
             # 从输出中提取 JSON 诊断信息并写入 error_missing_brace.json
             diagnostics = self._extract_json_from_output(output)
             
-            # -----------------------------------------------------------------
-            # 补充逻辑：分析输出的最后一行，捕获"无法识别的终结符"错误
-            # -----------------------------------------------------------------
             lines = output.strip().split('\n')
             if lines:
                 last_line = lines[-1].strip()
@@ -609,7 +606,6 @@ class MainWindow(QMainWindow):
                             })
                             # 如果之前是 0 errors，更新一下 errorCount
                             diagnostics["errorCount"] = diagnostics.get("errorCount", 0) + 1
-            # -----------------------------------------------------------------
 
             with open(self.error_json_path, 'w', encoding='utf-8') as json_fp:
                 json.dump(diagnostics, json_fp, ensure_ascii=False, indent=2)
