@@ -26,7 +26,13 @@ IDE 根目录
 | | |-- [settings.py]：忽略目录/文件后缀配置、默认语法高亮主题 DEFAULT_STYLE、默认前景/背景色等
 | |
 | |-- [core]：核心/编译相关数据
-| | |-- [error_missing_brace.json]：示例错误 JSON，用于问题面板展示并支持跳转到对应代码行
+| | |-- [error_log.txt]：编译器输出日志
+| | |-- [error_missing_brace.json]：错误 JSON，用于问题面板展示并支持跳转到对应代码行
+| | |-- [minic_parser.exe]：编译器，调用进行编译
+| | |-- [minisys_asm.exe]：汇编器，调用进行汇编
+| | |-- [output.asm]：编译器输出结果
+| | |-- [output]：汇编器输出结果文件夹
+| | | |-- [output.hex]：汇编器输出十六进制文件
 | |
 | |-- [resources]：静态资源
 | | |-- [activity_bar]：活动栏与文件树工具按钮所用的图标资源
