@@ -1,9 +1,13 @@
 {
   "errors": [
     {
-      "line": 4,
-      "message": "遇到中文符号 '；'",
-      "severity": "Error"
+      "line": 2,
+      "message": "syntax error, unexpected token",
+      "actual": "for",
+      "expected": [
+        "ELSE",
+        "OR"
+      ]
     }
   ],
   "errorCount": 1

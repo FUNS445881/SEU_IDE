@@ -46,8 +46,12 @@ class ProcessWorker(QObject):
 
             # 在Windows上使用 CREATE_NO_WINDOW 防止弹出控制台窗口
             creationflags = 0
+            encoding = 'utf-8'
             if sys.platform == "win32":
                 creationflags = subprocess.CREATE_NO_WINDOW
+                # Windows下命令行输出(特别是文件路径)通常是GBK编码(mbcs)
+                # 即使工具输出了 Active code page: 65001，部分原生API输出的路径可能仍是GBK
+                encoding = 'mbcs'
 
             # shell=True 允许我们运行更复杂的命令，但要注意安全风险
             process = subprocess.Popen(
@@ -56,7 +60,7 @@ class ProcessWorker(QObject):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                encoding='utf-8',
+                encoding=encoding,
                 errors='replace',
                 creationflags=creationflags
             )
@@ -149,7 +153,7 @@ class AssembleDialog(QDialog):
         self.debug_checkbox = QCheckBox("Generate Debug Info (--debug)", self)
         self.bios_checkbox = QCheckBox("BIOS Only Mode (--bios-only)", self)
         
-        # 默认选中 hex 和 debug (根据常用习惯，也可以都不选)
+        # 默认选中 hex 和 debug
         self.hex_checkbox.setChecked(True)
         self.debug_checkbox.setChecked(True)
 
@@ -278,7 +282,6 @@ class MainWindow(QMainWindow):
         if self.current_tab_index >= 0 and self.current_tab_index < len(self.opened_tabs):
             # 只有当内容真正发生变化时才标记为 modified
             # 这里的 tab['content'] 存储的是加载时或上次保存时的状态
-            # 注意：如果单纯切换Tab而不修改，_save_current_tab_state 会更新 tab['content']，所以对比也是一致的
             current_text = self.editor.toPlainText()
             tab = self.opened_tabs[self.current_tab_index]
             
@@ -351,8 +354,13 @@ class MainWindow(QMainWindow):
         
         # 3. 加载新 Tab 状态
         self._load_tab_content(index)
+
+        # 4. 如果查找面板可见，重新触发查找；否则清除之前的查找状态
+        self.editor_controller._clear_search()
+        if self.find_panel.isVisible():
+            self.find_panel._on_search()
         
-        # 4. 触发编译器检查 (切换文件后立即检查)
+        # 5. 触发编译器检查 (切换文件后立即检查)
         self.output_bar.clear_problems()
         self._run_compiler_cycle()
 
